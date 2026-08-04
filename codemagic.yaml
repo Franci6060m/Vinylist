@@ -4,7 +4,7 @@ workflows:
     max_build_duration: 30
     environment:
       android_signing:
-        - vinylist_keystore 
+        - vinylist_keystore
       vars:
         PACKAGE_NAME: "com.francistech.vinylist"
       node: 20
