@@ -6,7 +6,7 @@
 set -euo pipefail
 
 echo "== Installing JS deps =="
-npm ci
+npm install
 
 echo "== Generating Android project =="
 rm -rf android
