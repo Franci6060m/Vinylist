@@ -2,7 +2,6 @@ workflows:
   vinylist-android:
     name: Vinylist Android
     max_build_duration: 30
-    instance_type: linux_x2
     environment:
       android_signing:
         - vinylist_keystore
