@@ -14,7 +14,7 @@ npx cap add android
 echo "== Copying native plugin source =="
 DEST="android/app/src/main/java/com/francistech/vinylist"
 mkdir -p "$DEST"
-cp native-src/com/francistech/vinylist/MediaStorePlugin.kt "$DEST/"
+cp native-src/com/francistech/vinylist/MediaStorePlugin.java "$DEST/"
 cp native-src/com/francistech/vinylist/MainActivity.java "$DEST/"
 
 echo "== Merging manifest permissions =="
