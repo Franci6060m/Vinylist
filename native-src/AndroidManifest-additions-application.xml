@@ -1,0 +1,21 @@
+<!--
+  Add these lines inside the <application> tag of
+  android/app/src/main/AndroidManifest.xml (created by `npx cap add android`),
+  anywhere alongside the existing <activity> entry.
+-->
+
+<!-- Foreground service backing the lock-screen / notification playback controls -->
+<service
+    android:name="com.francistech.vinylist.MediaPlaybackService"
+    android:exported="false"
+    android:foregroundServiceType="mediaPlayback" />
+
+<!-- Routes hardware/Bluetooth media-button presses (and the notification's
+     own action buttons) into MediaPlaybackService's MediaSessionCompat -->
+<receiver
+    android:name="androidx.media.session.MediaButtonReceiver"
+    android:exported="true">
+    <intent-filter>
+        <action android:name="android.intent.action.MEDIA_BUTTON" />
+    </intent-filter>
+</receiver>
