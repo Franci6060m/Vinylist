@@ -498,6 +498,14 @@ const THEMES = [
   { id: 'autumnwood',name: 'Autumn Woods',     bg:'#181109', surface:'#251A0F', surface2:'#332415', text:'#F4E9D8', muted:'#B49A78', accent:'#C97B2C', accent2:'#E8A85C', light:false },
   { id: 'coralreef', name: 'Coral Reef',       bg:'#F5EDE6', surface:'#FFFFFF', surface2:'#F0DDD0', text:'#2B211C', muted:'#8C776C', accent:'#E8735A', accent2:'#4FB8AE', light:true  },
   { id: 'desertdune',name: 'Desert Dune',      bg:'#1C160D', surface:'#2A2214', surface2:'#3A2F1C', text:'#F5EAD4', muted:'#B3A278', accent:'#D9A441', accent2:'#EFC978', light:false },
+  // Two themes tuned specifically for the Neumorphism skin (see the
+  // reference art: soft graphite dial with a glowing cyan ring, and a
+  // pale soft-UI variant for people who prefer a light dial). Every
+  // theme already generates a matching neumorphism light/dark shadow
+  // pair automatically (see the `neu` useMemo below) — these two simply
+  // pick base/accent colors that read best pressed into soft shadow.
+  { id: 'cyanpulse', name: 'Cyan Pulse (Neu)', bg:'#2B2E33', surface:'#33363C', surface2:'#3D4048', text:'#EAF6F8', muted:'#8FA0A6', accent:'#37D6E8', accent2:'#7CEFFA', light:false },
+  { id: 'softsteel', name: 'Soft Steel (Neu)', bg:'#E7EAEE', surface:'#EFF2F6', surface2:'#D9DEE5', text:'#232830', muted:'#6C7684', accent:'#3E6FE0', accent2:'#7FA3F5', light:true },
   { id: 'skybloom',  name: 'Sky Bloom',        bg:'#EAF3F6', surface:'#FFFFFF', surface2:'#DCEAEF', text:'#1D2A2E', muted:'#6E8A92', accent:'#3FA7C9', accent2:'#8FD0E0', light:true  },
   { id: 'adaptive',  name: 'Adaptive',         adaptive: true, bg:'#141414', surface:'#1E1E1E', surface2:'#2A2A2A', text:'#F5F5F5', muted:'#999999', accent:'#E07A5F', accent2:'#81B29A', light:false },
 ];
@@ -787,23 +795,42 @@ function IconButton({ onClick, active, children, label, theme, skin, size = 'md'
   );
 }
 
-function PremiumSlider({ value, min = 0, max = 1, step = 0.01, onChange, theme, height = 6 }) {
+function PremiumSlider({ value, min = 0, max = 1, step = 0.01, onChange, theme, height = 6, skin }) {
   const pct = max > min ? ((value - min) / (max - min)) * 100 : 0;
+  const neu = skin === 'neu';
+  // Neu variant: the unfilled track reads as a groove pressed into the
+  // surface (inset shadow, no visible border), the filled portion is a
+  // solid accent bar that glows outward — matching the lit progress bars
+  // in the reference art instead of the flat two-tone bar used elsewhere.
+  const trackBg = neu
+    ? `linear-gradient(to right, ${theme.accent} 0%, ${theme.accent} ${pct}%, transparent ${pct}%, transparent 100%)`
+    : `linear-gradient(to right, ${theme.accent} 0%, ${theme.accent} ${pct}%, ${theme.surface2} ${pct}%, ${theme.surface2} 100%)`;
   return (
     <div style={{ position: 'relative', width: '100%', display: 'flex', alignItems: 'center' }}>
       <input
         type="range" min={min} max={max} step={step} value={value}
         onChange={e => onChange(parseFloat(e.target.value))}
-        className="premium-range"
+        className={neu ? 'premium-range neu-range' : 'premium-range'}
         style={{
           WebkitAppearance: 'none', appearance: 'none', width: '100%', height, borderRadius: height,
-          background: `linear-gradient(to right, ${theme.accent} 0%, ${theme.accent} ${pct}%, ${theme.surface2} ${pct}%, ${theme.surface2} 100%)`,
+          background: neu ? 'var(--neu-bg)' : trackBg,
+          boxShadow: neu ? `inset 2px 2px 4px var(--neu-dark), inset -2px -2px 4px var(--neu-light)` : undefined,
           outline: 'none', cursor: 'pointer',
         }}
       />
+      {neu && (
+        <div aria-hidden style={{
+          position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)',
+          width: `${pct}%`, height, borderRadius: height, pointerEvents: 'none',
+          background: theme.accent, boxShadow: `0 0 8px ${theme.accent}99, 0 0 2px ${theme.accent}`,
+          transition: 'width 80ms linear',
+        }} />
+      )}
       <style>{`
         input.premium-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 15px; height: 15px; border-radius: 50%; background: ${theme.accent2}; border: 2px solid ${theme.bg}; box-shadow: 0 1px 4px rgba(0,0,0,0.4); cursor: pointer; }
         input.premium-range::-moz-range-thumb { width: 13px; height: 13px; border-radius: 50%; background: ${theme.accent2}; border: 2px solid ${theme.bg}; cursor: pointer; }
+        input.neu-range::-webkit-slider-thumb { box-shadow: 0 0 0 3px var(--neu-bg), 0 0 10px ${theme.accent}aa; }
+        input.neu-range::-moz-range-thumb { box-shadow: 0 0 0 3px var(--neu-bg), 0 0 10px ${theme.accent}aa; }
       `}</style>
     </div>
   );
@@ -1598,7 +1625,16 @@ function MusicPlayerApp() {
   const seek = useCallback((t) => { if (activeAudioRef.current) activeAudioRef.current.currentTime = t; setCurrentTime(t); }, [activeAudioRef]);
   const cycleRepeat = () => setRepeatMode(m => m === 'off' ? 'all' : m === 'all' ? 'one' : 'off');
 
-  /* ---------------------- background playback / lock-screen controls ---------------------- */
+  /* ---------------------- background playback / lock-screen controls ----------------------
+     Two parallel systems on purpose:
+       1. The Web MediaSession API (below) — works for browser/PWA installs.
+       2. window.VinylistNative's MediaControl bridge (native-media.js) — a real
+          Android foreground Service + MediaSessionCompat + notification when
+          running as the packaged app (see native-src/.../MediaPlaybackNotificationService.java).
+          That's the one that keeps working once the app is backgrounded or the
+          WebView is frozen, and the one that actually shows a notification.
+     Both safely no-op outside their own context, so this block is identical
+     whether Vinylist is running as a website or the installed Android app. */
   useEffect(() => {
     if (!('mediaSession' in navigator)) return;
     if (!backgroundPlaybackEnabled || !currentSong) { navigator.mediaSession.metadata = null; return; }
@@ -1619,6 +1655,73 @@ function MusicPlayerApp() {
     handlers.forEach(([action, handler]) => { try { navigator.mediaSession.setActionHandler(action, handler); } catch { /* action unsupported */ } });
     return () => handlers.forEach(([action]) => { try { navigator.mediaSession.setActionHandler(action, null); } catch {} });
   }, [backgroundPlaybackEnabled, togglePlay, playPrev, playNext, seek]);
+
+  /* -- native notification: keep small always-current base64 artwork per track -- */
+  const nativeArtCacheRef = useRef(new Map());
+  const [nativeArtwork, setNativeArtwork] = useState('');
+  useEffect(() => {
+    let cancelled = false;
+    if (!window.VinylistNative?.isNative || !currentSong?.pictureUrl) { setNativeArtwork(''); return; }
+    const cached = nativeArtCacheRef.current.get(currentSong.pictureUrl);
+    if (cached) { setNativeArtwork(cached); return; }
+    (async () => {
+      try {
+        const b64 = await window.VinylistNative.artworkToBase64(currentSong.pictureUrl, 320);
+        if (!cancelled && b64) {
+          nativeArtCacheRef.current.set(currentSong.pictureUrl, b64);
+          if (nativeArtCacheRef.current.size > 30) nativeArtCacheRef.current.delete(nativeArtCacheRef.current.keys().next().value);
+          setNativeArtwork(b64);
+        }
+      } catch { /* artwork is a nice-to-have; notification still works without it */ }
+    })();
+    return () => { cancelled = true; };
+  }, [currentSong?.pictureUrl]);
+
+  /* -- native notification: push metadata whenever the track (or its art) changes -- */
+  useEffect(() => {
+    if (!window.VinylistNative?.isNative) return;
+    if (!backgroundPlaybackEnabled || !currentSong) { window.VinylistNative.stopNativeMedia(); return; }
+    window.VinylistNative.updateNativeMetadata({
+      title: currentSong.title, artist: currentSong.artist || '', album: currentSong.album || '',
+      durationMs: Math.round((duration || 0) * 1000), artworkBase64: nativeArtwork,
+    });
+  }, [backgroundPlaybackEnabled, currentSong, nativeArtwork, duration]);
+
+  /* -- native notification: push play/pause state immediately, and resync
+        position periodically while playing so the lock-screen scrubber and
+        the app never drift apart -- */
+  useEffect(() => {
+    if (!window.VinylistNative?.isNative || !backgroundPlaybackEnabled || !currentSong) return;
+    window.VinylistNative.updateNativePlaybackState({ isPlaying, positionMs: Math.round(currentTime * 1000) });
+    if (!isPlaying) return;
+    const id = setInterval(() => {
+      window.VinylistNative.updateNativePlaybackState({ isPlaying: true, positionMs: Math.round((activeAudioRef.current?.currentTime || currentTime) * 1000) });
+    }, 15000);
+    return () => clearInterval(id);
+  }, [backgroundPlaybackEnabled, currentSong, isPlaying]);
+
+  /* -- native notification: request POST_NOTIFICATIONS (Android 13+) once the
+        person actually starts playing, instead of on cold app launch -- */
+  useEffect(() => {
+    if (isPlaying && window.VinylistNative?.isNative) window.VinylistNative.requestNotificationPermission();
+  }, [isPlaying]);
+
+  /* -- native notification: wire notification/lock-screen taps back into the
+        same togglePlay/playPrev/playNext/seek used by the on-screen controls.
+        Registered once; a ref holds the latest callbacks so this never needs
+        to re-subscribe (and never fires a stale closure). -- */
+  const latestControlsRef = useRef({});
+  latestControlsRef.current = { togglePlay, playPrev, playNext, seek };
+  useEffect(() => {
+    if (!window.VinylistNative?.isNative) return;
+    return window.VinylistNative.onNativeMediaControl({
+      play: () => latestControlsRef.current.togglePlay(),
+      pause: () => latestControlsRef.current.togglePlay(),
+      previous: () => latestControlsRef.current.playPrev(),
+      next: () => latestControlsRef.current.playNext(),
+      seek: ({ positionMs }) => { if (typeof positionMs === 'number') latestControlsRef.current.seek(positionMs / 1000); },
+    });
+  }, []);
 
   /* ---------------------- listening-time flush (for the weekly report) ---------------------- */
   const flushListenedSeconds = useCallback(() => {
@@ -2472,7 +2575,7 @@ function PlayerView({
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', maxWidth: 340, marginTop: 24 }}>
         <IconButton theme={theme} skin={skin} size="sm" label={muted ? 'Unmute' : 'Mute'} onClick={() => setMuted(m => !m)}><VolIcon size={17} /></IconButton>
-        <PremiumSlider value={muted ? 0 : volume} onChange={v => { setVolume(v); if (muted) setMuted(false); }} theme={theme} height={4} />
+        <PremiumSlider value={muted ? 0 : volume} onChange={v => { setVolume(v); if (muted) setMuted(false); }} theme={theme} skin={skin} height={4} />
         <IconButton theme={theme} skin={skin} size="sm" label={currentSong.liked ? 'Unlike' : 'Like'} onClick={toggleLike}><Heart size={17} fill={currentSong.liked ? theme.accent : 'none'} color={currentSong.liked ? theme.accent : theme.text} /></IconButton>
         <IconButton theme={theme} skin={skin} size="sm" label="Add to playlist" onClick={setAddToPlaylistFor}><ListPlus size={17} color={theme.text} /></IconButton>
       </div>
@@ -3038,13 +3141,13 @@ function SettingsView({
 
       <SectionLabel theme={theme} icon={Zap} text="Pre-amp" />
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-        <PremiumSlider value={preampDb} min={0} max={12} step={1} onChange={setPreampDb} theme={theme} height={5} />
+        <PremiumSlider value={preampDb} min={0} max={12} step={1} onChange={setPreampDb} theme={theme} skin={skin} height={5} />
         <span style={{ fontSize: 12, color: theme.muted, width: 46, textAlign: 'right' }}>+{preampDb}dB</span>
       </div>
 
       <SectionLabel theme={theme} icon={Waves} text="Gapless & Crossfade" />
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-        <PremiumSlider value={crossfadeSeconds} min={0} max={5} step={1} onChange={setCrossfadeSeconds} theme={theme} height={5} />
+        <PremiumSlider value={crossfadeSeconds} min={0} max={5} step={1} onChange={setCrossfadeSeconds} theme={theme} skin={skin} height={5} />
         <span style={{ fontSize: 12, color: theme.muted, width: 46, textAlign: 'right' }}>{crossfadeSeconds}s</span>
       </div>
       <div style={{ fontSize: 11.5, color: theme.muted, marginBottom: 20 }}>{crossfadeSeconds === 0 ? 'True gapless — the next track is pre-buffered and swaps instantly.' : `Tracks blend into each other over ${crossfadeSeconds}s.`}</div>

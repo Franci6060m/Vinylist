@@ -79,6 +79,81 @@
     }
   }
 
+  /* -------------------------------------------------------------------
+     Native playback notification / lock-screen controls, backed by a real
+     Android foreground Service + MediaSessionCompat (see MediaControlPlugin
+     + MediaPlaybackNotificationService in native-src/). This is what makes
+     play/pause/next/previous work from the notification shade and lock
+     screen, and what keeps the notification alive once the app itself is
+     backgrounded or the WebView is frozen -- none of it depends on the Web
+     MediaSession API, which Android's WebView only partially implements.
+     ------------------------------------------------------------------- */
+  function mediaControlPlugin() {
+    return isNative ? global.Capacitor.Plugins.MediaControl : null;
+  }
+
+  async function updateNativeMetadata({ title, artist, album, durationMs, artworkBase64 }) {
+    const plugin = mediaControlPlugin();
+    if (!plugin) return;
+    try {
+      await plugin.updateMetadata({ title: title || '', artist: artist || '', album: album || '', durationMs: durationMs || 0, artworkBase64: artworkBase64 || '' });
+    } catch (e) { /* best-effort */ }
+  }
+
+  async function updateNativePlaybackState({ isPlaying, positionMs }) {
+    const plugin = mediaControlPlugin();
+    if (!plugin) return;
+    try { await plugin.updatePlaybackState({ isPlaying: !!isPlaying, positionMs: positionMs || 0 }); } catch (e) { /* best-effort */ }
+  }
+
+  async function stopNativeMedia() {
+    const plugin = mediaControlPlugin();
+    if (!plugin) return;
+    try { await plugin.stop(); } catch (e) { /* best-effort */ }
+  }
+
+  async function requestNotificationPermission() {
+    const plugin = mediaControlPlugin();
+    if (!plugin) return false;
+    try {
+      const check = await plugin.checkNotificationPermission();
+      if (check.granted) return true;
+      const res = await plugin.requestNotificationPermission();
+      return !!res.granted;
+    } catch (e) { return false; }
+  }
+
+  /** handlers: { play, pause, previous, next, seek }. Returns an unsubscribe function. */
+  function onNativeMediaControl(handlers) {
+    const plugin = mediaControlPlugin();
+    if (!plugin) return () => {};
+    const subs = Object.entries(handlers).map(([event, fn]) => plugin.addListener(event, fn));
+    return () => { subs.forEach(s => s?.then?.(h => h.remove()).catch(() => {})); };
+  }
+
+  /** Downscales an image (blob:/data: URL) to a small square JPEG and returns
+      raw base64 (no data: prefix) -- kept small on purpose, since it travels
+      to the native side as an Intent extra for the notification's artwork. */
+  async function artworkToBase64(url, maxSize = 320) {
+    if (!url) return '';
+    const img = await new Promise((resolve, reject) => {
+      const el = new Image();
+      el.crossOrigin = 'anonymous';
+      el.onload = () => resolve(el);
+      el.onerror = reject;
+      el.src = url;
+    });
+    const side = Math.min(maxSize, Math.max(img.width, img.height) || maxSize);
+    const canvas = document.createElement('canvas');
+    canvas.width = side; canvas.height = side;
+    const ctx = canvas.getContext('2d');
+    const scale = Math.max(side / img.width, side / img.height);
+    const dw = img.width * scale, dh = img.height * scale;
+    ctx.drawImage(img, (side - dw) / 2, (side - dh) / 2, dw, dh);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+    return dataUrl.split(',')[1] || '';
+  }
+
   global.VinylistNative = {
     isNative,
     checkPermission,
@@ -86,5 +161,11 @@
     scanLibrary,
     backupAppData,
     restoreAppData,
+    updateNativeMetadata,
+    updateNativePlaybackState,
+    stopNativeMedia,
+    requestNotificationPermission,
+    onNativeMediaControl,
+    artworkToBase64,
   };
 })(window);
