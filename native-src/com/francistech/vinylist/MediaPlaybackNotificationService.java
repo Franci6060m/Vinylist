@@ -152,7 +152,7 @@ public class MediaPlaybackNotificationService extends Service {
         // foreground guarantee with stopForeground(false), which keeps the
         // notification visible without pinning the process.
         startForegroundCompat();
-        if (!isPlaying) stopForeground(false);
+        if (!isPlaying) stopForegroundCompat();
         return START_NOT_STICKY;
     }
 
@@ -266,6 +266,14 @@ public class MediaPlaybackNotificationService extends Service {
             startForeground(NOTIF_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
         } else {
             startForeground(NOTIF_ID, n);
+        }
+    }
+
+    private void stopForegroundCompat() {
+        if (Build.VERSION.SDK_INT >= 33) {
+            stopForeground(STOP_FOREGROUND_DETACH);
+        } else {
+            stopForeground(false);
         }
     }
 

@@ -1677,21 +1677,31 @@ function MusicPlayerApp() {
     return () => { cancelled = true; };
   }, [currentSong?.pictureUrl]);
 
+  /* -- native notification: only ever touch the native foreground service
+        after the person has actually pressed play at least once *this*
+        session. Restoring a previous track + backgroundPlaybackEnabled on
+        cold launch must NOT auto-start it -- calling startForegroundService
+        before any user gesture (and before POST_NOTIFICATIONS has even been
+        requested, which is deliberately deferred to the isPlaying effect
+        below) is what was crashing the app a few seconds after launch. -- */
+  const nativeSessionStartedRef = useRef(false);
+  useEffect(() => { if (isPlaying) nativeSessionStartedRef.current = true; }, [isPlaying]);
+
   /* -- native notification: push metadata whenever the track (or its art) changes -- */
   useEffect(() => {
     if (!window.VinylistNative?.isNative) return;
-    if (!backgroundPlaybackEnabled || !currentSong) { window.VinylistNative.stopNativeMedia(); return; }
+    if (!backgroundPlaybackEnabled || !currentSong || !nativeSessionStartedRef.current) { window.VinylistNative.stopNativeMedia(); return; }
     window.VinylistNative.updateNativeMetadata({
       title: currentSong.title, artist: currentSong.artist || '', album: currentSong.album || '',
       durationMs: Math.round((duration || 0) * 1000), artworkBase64: nativeArtwork,
     });
-  }, [backgroundPlaybackEnabled, currentSong, nativeArtwork, duration]);
+  }, [backgroundPlaybackEnabled, currentSong, nativeArtwork, duration, isPlaying]);
 
   /* -- native notification: push play/pause state immediately, and resync
         position periodically while playing so the lock-screen scrubber and
         the app never drift apart -- */
   useEffect(() => {
-    if (!window.VinylistNative?.isNative || !backgroundPlaybackEnabled || !currentSong) return;
+    if (!window.VinylistNative?.isNative || !backgroundPlaybackEnabled || !currentSong || !nativeSessionStartedRef.current) return;
     window.VinylistNative.updateNativePlaybackState({ isPlaying, positionMs: Math.round(currentTime * 1000) });
     if (!isPlaying) return;
     const id = setInterval(() => {
