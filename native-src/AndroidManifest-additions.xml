@@ -1,0 +1,16 @@
+<!--
+  Add these lines inside the <manifest> tag of
+  android/app/src/main/AndroidManifest.xml (created by `npx cap add android`),
+  ABOVE the <application> tag.
+-->
+
+<!-- Android 13+ (API 33+) -->
+<uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+
+<!-- Android 12 and below -->
+<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+    android:maxSdkVersion="32" />
+
+<!-- Keeps background/lock-screen playback alive -->
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+<uses-permission android:name="android.permission.WAKE_LOCK" />
