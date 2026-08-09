@@ -1,0 +1,64 @@
+workflows:
+  vinylist-android:
+    name: Vinylist Android
+    max_build_duration: 30
+    environment:
+      android_signing:
+        - vinylist_keystore
+      vars:
+        PACKAGE_NAME: "com.francistech.vinylist"
+      node: 20
+      java: 17
+
+    scripts:
+      - name: Prepare Android project (generate + inject native plugin)
+        script: |
+          chmod +x scripts/prepare-android.sh
+          ./scripts/prepare-android.sh
+
+      - name: Set up signing config
+        script: |
+          # Codemagic decodes the keystore you upload as CM_KEYSTORE and
+          # exposes these vars automatically once android_signing (below)
+          # references your keystore reference name.
+          cat >> "$CM_BUILD_DIR/android/app/build.gradle" <<'EOF'
+
+          android {
+              signingConfigs {
+                  release {
+                      storeFile file(System.getenv("CM_KEYSTORE_PATH"))
+                      storePassword System.getenv("CM_KEYSTORE_PASSWORD")
+                      keyAlias System.getenv("CM_KEY_ALIAS")
+                      keyPassword System.getenv("CM_KEY_PASSWORD")
+                  }
+              }
+              buildTypes {
+                  release {
+                      signingConfig signingConfigs.release
+                  }
+              }
+          }
+          EOF
+
+      - name: Build release AAB
+        script: |
+          cd android
+          ./gradlew bundleRelease
+
+      - name: Build release APK (for direct/sideload distribution)
+        script: |
+          cd android
+          ./gradlew assembleRelease
+
+    artifacts:
+      - android/app/build/outputs/**/*.aab
+      - android/app/build/outputs/**/*.apk
+      - android/app/build/outputs/**/mapping.txt
+
+    publishing:
+      email:
+        recipients:
+          - maserekafrancis81@gmail.com
+        notify:
+          success: true
+          failure: true
