@@ -1,0 +1,9 @@
+{
+  "appId": "com.francistech.vinylist",
+  "appName": "Vinylist",
+  "webDir": "www",
+  "bundledWebRuntime": false,
+  "android": {
+    "allowMixedContent": false
+  }
+}
