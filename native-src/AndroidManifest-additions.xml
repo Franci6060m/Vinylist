@@ -1,0 +1,58 @@
+<!--
+  Add these lines inside the <manifest> tag of
+  android/app/src/main/AndroidManifest.xml (created by `npx cap add android`),
+  ABOVE the <application> tag.
+
+  Note: none of this needs doing by hand if you're using
+  scripts/prepare-android.sh (what Codemagic runs) -- it merges all of this
+  in automatically on every build, since android/ gets regenerated from
+  scratch each time. This file exists purely as a reference for what ends
+  up in the manifest, or for a manual build that skips that script.
+-->
+
+<!-- Android 13+ (API 33+) -->
+<uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+<!-- Android 12 and below -->
+<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+    android:maxSdkVersion="32" />
+
+<!-- Keeps background/lock-screen playback + the notification service alive -->
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+<uses-permission android:name="android.permission.WAKE_LOCK" />
+
+<!-- In-app update check + APK download/install (AppUpdatePlugin.java) -->
+<uses-permission android:name="android.permission.INTERNET" />
+<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+<!--
+  Add this INSIDE the <application> tag (anywhere among its other
+  children, e.g. next to <activity>) -- it's the real native notification
+  service, not the WebView/Web MediaSession API:
+-->
+<!--
+<service
+    android:name="com.francistech.vinylist.MediaPlaybackNotificationService"
+    android:exported="false"
+    android:foregroundServiceType="mediaPlayback" />
+-->
+
+<!--
+  Also inside <application> -- the FileProvider the in-app update installer
+  uses to hand Android's package installer a content:// URI for the
+  downloaded APK (a bare file:// path is blocked across app boundaries on
+  API 24+). Matches native-src/res/xml/file_paths.xml.
+-->
+<!--
+<provider
+    android:name="androidx.core.content.FileProvider"
+    android:authorities="${applicationId}.fileprovider"
+    android:exported="false"
+    android:grantUriPermissions="true">
+    <meta-data
+        android:name="android.support.FILE_PROVIDER_PATHS"
+        android:resource="@xml/file_paths" />
+</provider>
+-->

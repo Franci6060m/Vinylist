@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Terms & Conditions — Vinylist Music Player</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#121115; --bg-raise:#17151b; --surface:#1C1B21; --surface2:#26242C;
+    --text:#F3EFE7; --muted:#9A94A6; --muted-dim:#726c80;
+    --accent:#C9A66B; --accent2:#E8C88A; --hair:#2c2a33;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    font-size:16px; line-height:1.7; -webkit-font-smoothing:antialiased;
+  }
+  ::selection{ background:var(--accent); color:#171015; }
+
+  a{ color:var(--accent2); text-decoration:none; border-bottom:1px solid rgba(232,200,138,0.35); }
+  a:hover{ border-bottom-color:var(--accent2); }
+
+  .groove-field{
+    position:relative; overflow:hidden;
+    background:
+      radial-gradient(circle at 82% -10%, rgba(201,166,107,0.16), transparent 45%),
+      var(--bg);
+  }
+  .groove-rings{
+    position:absolute; top:-160px; right:-160px; width:520px; height:520px;
+    border-radius:50%; pointer-events:none;
+    background:
+      repeating-radial-gradient(circle at center,
+        rgba(201,166,107,0.16) 0px, rgba(201,166,107,0.16) 1px,
+        transparent 1px, transparent 9px);
+    -webkit-mask-image: radial-gradient(circle at center, black 60%, transparent 78%);
+            mask-image: radial-gradient(circle at center, black 60%, transparent 78%);
+  }
+  .groove-rings::after{
+    content:''; position:absolute; inset:0; margin:auto; width:34px; height:34px;
+    border-radius:50%; background:var(--accent); top:calc(50% - 17px); left:calc(50% - 17px);
+    box-shadow:0 0 0 6px var(--bg), 0 0 0 7px rgba(201,166,107,0.4);
+  }
+
+  header.hero{ padding:64px 24px 46px; position:relative; }
+  .eyebrow{
+    display:inline-flex; align-items:center; gap:8px;
+    font-size:12.5px; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--accent); font-weight:600; margin-bottom:18px;
+  }
+  .eyebrow::before{ content:''; width:16px; height:1px; background:var(--accent); display:inline-block; }
+  h1.title{
+    font-family:'Fraunces', Georgia, serif; font-optical-sizing:auto;
+    font-weight:600; font-size:clamp(34px, 6vw, 52px); line-height:1.08;
+    margin:0 0 14px; letter-spacing:-0.01em; max-width:16ch;
+  }
+  .brand-line{ color:var(--muted); font-size:15px; max-width:52ch; }
+  .brand-line b{ color:var(--text); font-weight:600; }
+  .meta-row{
+    display:flex; flex-wrap:wrap; gap:10px 22px; margin-top:26px;
+    font-size:13px; color:var(--muted-dim);
+  }
+  .meta-row span b{ color:var(--muted); font-weight:600; }
+
+  .layout{ max-width:920px; margin:0 auto; padding:0 24px 100px; display:grid; grid-template-columns:220px 1fr; gap:48px; }
+  @media (max-width:820px){ .layout{ grid-template-columns:1fr; } }
+
+  nav.toc{ position:sticky; top:24px; align-self:start; padding-top:8px; }
+  nav.toc .toc-label{ font-size:11.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted-dim); margin-bottom:12px; font-weight:600; }
+  nav.toc ol{ list-style:none; margin:0; padding:0; counter-reset:toc; }
+  nav.toc li{ counter-increment:toc; margin-bottom:2px; }
+  nav.toc a{
+    display:flex; gap:10px; border:none; color:var(--muted); font-size:13.5px;
+    padding:7px 0; line-height:1.4;
+  }
+  nav.toc a::before{
+    content:counter(toc,decimal-leading-zero); color:var(--accent);
+    font-family:'Fraunces',serif; font-size:12.5px; font-weight:600; flex-shrink:0; padding-top:1px;
+  }
+  nav.toc a:hover{ color:var(--text); }
+
+  main{ min-width:0; }
+  .lede{
+    font-size:17px; color:var(--text); background:var(--surface);
+    border:1px solid var(--hair); border-left:3px solid var(--accent);
+    border-radius:10px; padding:18px 20px; margin:0 0 40px;
+  }
+  .lede b{ color:var(--accent2); }
+
+  section.clause{ padding-top:30px; scroll-margin-top:24px; }
+  section.clause + section.clause{ border-top:1px solid var(--hair); position:relative; }
+  section.clause + section.clause::before{
+    content:''; position:absolute; top:-1px; left:0; width:46px; height:3px; background:var(--accent);
+  }
+  h2.clause-title{
+    font-family:'Fraunces', Georgia, serif; font-weight:600; font-size:22px;
+    margin:0 0 14px; display:flex; align-items:baseline; gap:12px; color:var(--text);
+  }
+  h2.clause-title .num{ color:var(--accent); font-size:15px; font-weight:600; font-family:'Inter',sans-serif; }
+  section.clause p{ color:#DCD7CC; margin:0 0 14px; font-size:15.5px; }
+  section.clause p.muted{ color:var(--muted); font-size:14px; }
+  section.clause ul{ margin:0 0 14px; padding-left:20px; color:#DCD7CC; font-size:15.5px; }
+  section.clause li{ margin-bottom:8px; }
+  section.clause li b, section.clause p b{ color:var(--accent2); font-weight:600; }
+
+  .contact-card{
+    display:flex; align-items:center; gap:16px; background:var(--surface);
+    border:1px solid var(--hair); border-radius:14px; padding:18px 20px; margin-top:10px;
+  }
+  .contact-card .dot{ width:40px; height:40px; border-radius:50%; background:linear-gradient(135deg,var(--accent),var(--accent2)); flex-shrink:0; }
+  .contact-card a.btn{
+    margin-left:auto; border:1px solid var(--accent); color:var(--accent2); border-bottom:1px solid var(--accent);
+    padding:9px 16px; border-radius:999px; font-size:13.5px; font-weight:600; white-space:nowrap;
+  }
+  .contact-card a.btn:hover{ background:rgba(201,166,107,0.12); }
+
+  footer.page-foot{
+    max-width:920px; margin:0 auto; padding:36px 24px 64px; border-top:1px solid var(--hair);
+    display:flex; flex-wrap:wrap; gap:14px 28px; align-items:center; justify-content:space-between;
+    color:var(--muted-dim); font-size:13px;
+  }
+  footer.page-foot a{ color:var(--muted); border-bottom:1px solid var(--hair); }
+  .back-top{ position:fixed; right:20px; bottom:20px; width:42px; height:42px; border-radius:50%;
+    background:var(--surface); border:1px solid var(--hair); color:var(--accent2);
+    display:flex; align-items:center; justify-content:center; font-size:18px; opacity:.85; }
+
+  @media print{
+    .back-top, nav.toc{ display:none; }
+    body{ background:#fff; color:#111; }
+  }
+</style>
+</head>
+<body>
+
+<div class="groove-field">
+  <div class="groove-rings"></div>
+  <header class="hero">
+    <div class="eyebrow">Legal · FrancisTech</div>
+    <h1 class="title">Terms &amp; Conditions</h1>
+    <p class="brand-line">These Terms govern your use of <b>Vinylist Music Player</b>, built and published by <b>FrancisTech</b>. By installing or using the app, you agree to them.</p>
+    <div class="meta-row">
+      <span><b>Effective:</b> August 5, 2026</span>
+      <span><b>App:</b> Vinylist Music Player</span>
+      <span><b>Package:</b> com.francistech.vinylist</span>
+      <span><b>Publisher:</b> FrancisTech</span>
+    </div>
+  </header>
+</div>
+
+<div class="layout">
+  <nav class="toc">
+    <div class="toc-label">On this page</div>
+    <ol>
+      <li><a href="#acceptance">Acceptance</a></li>
+      <li><a href="#what-it-is">What Vinylist is</a></li>
+      <li><a href="#license">License to use</a></li>
+      <li><a href="#your-content">Your content</a></li>
+      <li><a href="#ip">Intellectual property</a></li>
+      <li><a href="#permissions">Device permissions</a></li>
+      <li><a href="#acceptable-use">Acceptable use</a></li>
+      <li><a href="#no-warranty">No warranty</a></li>
+      <li><a href="#liability">Limitation of liability</a></li>
+      <li><a href="#termination">Termination</a></li>
+      <li><a href="#law">Governing law</a></li>
+      <li><a href="#changes">Changes to these terms</a></li>
+      <li><a href="#contact">Contact</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <div class="lede" id="acceptance">
+      <b>By installing or using Vinylist</b>, you agree to these Terms &amp; Conditions in full. If you don't agree, please don't use the app. See our <a href="privacy-policy.html">Privacy Policy</a> for how your data is handled.
+    </div>
+
+    <section class="clause" id="what-it-is">
+      <h2 class="clause-title"><span class="num">01</span>What Vinylist is</h2>
+      <p>Vinylist is a personal, offline-first music player. It plays audio files, displays lyrics, and tracks listening habits entirely on your own device. It does not host, distribute, stream, or provide any music, lyrics, or other copyrighted content of its own — you supply everything it plays.</p>
+    </section>
+
+    <section class="clause" id="license">
+      <h2 class="clause-title"><span class="num">02</span>License to use</h2>
+      <p>FrancisTech grants you a personal, non-exclusive, non-transferable, revocable license to install and use Vinylist on devices you own or control, for your own personal, non-commercial listening. You may not resell, sublicense, rent, or redistribute the app itself.</p>
+    </section>
+
+    <section class="clause" id="your-content">
+      <h2 class="clause-title"><span class="num">03</span>Your content</h2>
+      <p>You're solely responsible for the audio files, lyrics, and playlists you import into Vinylist, and for making sure you have the legal right to possess and play them. FrancisTech does not review, host, or have any access to your library — nothing you import is transmitted anywhere.</p>
+      <p>Vinylist must not be used to infringe anyone's copyright or other rights. Responsibility for the legality of imported content rests entirely with you.</p>
+    </section>
+
+    <section class="clause" id="ip">
+      <h2 class="clause-title"><span class="num">04</span>Intellectual property</h2>
+      <p>The Vinylist name, logo, interface design, and underlying code are the property of FrancisTech and are protected by applicable intellectual property laws. These Terms don't grant you any rights to FrancisTech's trademarks or branding beyond normal use of the app.</p>
+      <p>You retain all rights to the audio, lyrics, and playlists you personally import — Vinylist claims no ownership over your content.</p>
+    </section>
+
+    <section class="clause" id="permissions">
+      <h2 class="clause-title"><span class="num">05</span>Device permissions</h2>
+      <p>To function, the app requests permission to read audio/media on your device, run a foreground playback service, keep the device awake during playback, and show local notifications. These are described in full, along with why each is needed, in our <a href="privacy-policy.html">Privacy Policy</a>.</p>
+    </section>
+
+    <section class="clause" id="acceptable-use">
+      <h2 class="clause-title"><span class="num">06</span>Acceptable use</h2>
+      <p>You agree not to:</p>
+      <ul>
+        <li>Reverse-engineer, decompile, or tamper with the app in an attempt to circumvent its licensing or intended function</li>
+        <li>Use Vinylist for any unlawful purpose, or to store or play content you don't have the right to use</li>
+        <li>Attempt to interfere with the app's stability or another user's device through it</li>
+      </ul>
+    </section>
+
+    <section class="clause" id="no-warranty">
+      <h2 class="clause-title"><span class="num">07</span>No warranty</h2>
+      <p>Vinylist is provided <b>"as is"</b> and <b>"as available,"</b> without warranties of any kind, express or implied. FrancisTech does not guarantee the app will be error-free, secure, or uninterrupted, or that it will meet your specific requirements.</p>
+    </section>
+
+    <section class="clause" id="liability">
+      <h2 class="clause-title"><span class="num">08</span>Limitation of liability</h2>
+      <p>To the fullest extent permitted by law, FrancisTech is not liable for any indirect, incidental, or consequential damages arising from your use of Vinylist — including loss of your music library, playlists, lyrics, or listening stats, or any device issue resulting from app use. Because your data lives only on your device, we strongly recommend keeping your own backups of anything irreplaceable.</p>
+    </section>
+
+    <section class="clause" id="termination">
+      <h2 class="clause-title"><span class="num">09</span>Termination</h2>
+      <p>You may stop using Vinylist at any time by uninstalling it. FrancisTech reserves the right to discontinue or modify the app at its discretion. Since Vinylist has no accounts or server, there is nothing further for FrancisTech to "terminate" on its end beyond ceasing updates.</p>
+    </section>
+
+    <section class="clause" id="law">
+      <h2 class="clause-title"><span class="num">10</span>Governing law</h2>
+      <p>These Terms are governed by the laws of Uganda, without regard to conflict-of-law principles, unless a different jurisdiction is required by the law applicable to you as a consumer.</p>
+      <p class="muted">FrancisTech can update this section if the business is formally registered under a different jurisdiction later.</p>
+    </section>
+
+    <section class="clause" id="changes">
+      <h2 class="clause-title"><span class="num">11</span>Changes to these terms</h2>
+      <p>These Terms may be updated as Vinylist evolves. Material changes will be reflected by updating the "Effective" date above. Continuing to use Vinylist after an update means you accept the revised Terms.</p>
+    </section>
+
+    <section class="clause" id="contact">
+      <h2 class="clause-title"><span class="num">12</span>Contact</h2>
+      <p>Questions about these Terms can be sent directly to FrancisTech:</p>
+      <div class="contact-card">
+        <div class="dot"></div>
+        <div>
+          <div style="font-weight:600; font-size:15px;">FrancisTech Support</div>
+          <div style="color:var(--muted); font-size:13.5px;">WhatsApp — usually the fastest reply</div>
+        </div>
+        <a class="btn" href="https://wa.me/256760176031" target="_blank" rel="noopener noreferrer">Message us</a>
+      </div>
+    </section>
+  </main>
+</div>
+
+<footer class="page-foot">
+  <div>© 2026 FrancisTech. Vinylist Music Player.</div>
+  <div><a href="privacy-policy.html">Privacy Policy</a></div>
+</footer>
+
+<a href="#acceptance" class="back-top" aria-label="Back to top">↑</a>
+</body>
+</html>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Matches where AppUpdatePlugin.downloadUpdate() saves the APK
+  (getExternalFilesDir(null)/vinylist-update.apk) — this is what lets
+  FileProvider hand the package installer a content:// URI for that file
+  instead of a bare file:// path, which Android blocks across app
+  boundaries on API 24+.
+-->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <external-files-path name="update_files" path="." />
+</paths>
