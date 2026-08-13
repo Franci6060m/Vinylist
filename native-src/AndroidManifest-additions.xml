@@ -1,0 +1,75 @@
+<!--
+  Add these lines inside the <manifest> tag of
+  android/app/src/main/AndroidManifest.xml (created by `npx cap add android`),
+  ABOVE the <application> tag.
+
+  Note: none of this needs doing by hand if you're using
+  scripts/prepare-android.sh (what Codemagic runs) -- it merges all of this
+  in automatically on every build, since android/ gets regenerated from
+  scratch each time. This file exists purely as a reference for what ends
+  up in the manifest, or for a manual build that skips that script.
+-->
+
+<!-- Android 13+ (API 33+) -->
+<uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+<!-- Android 12 and below -->
+<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+    android:maxSdkVersion="32" />
+
+<!-- Only used as a fallback to write the "Music Lyrics" backup copies on
+     Android 9 and below (see MediaStorePlugin.saveLyricsFile). Android 10+
+     writes through MediaStore.Downloads instead, which needs no runtime
+     permission at all, so this is capped well below scoped storage. -->
+<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+    android:maxSdkVersion="28" />
+
+<!-- Keeps background/lock-screen playback + the notification service alive -->
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+<uses-permission android:name="android.permission.WAKE_LOCK" />
+
+<!-- In-app update check + APK download/install (AppUpdatePlugin.java) -->
+<uses-permission android:name="android.permission.INTERNET" />
+<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+<!-- Lets the app ask to be exempted from Doze/App Standby battery
+     optimization (BatteryPlugin.java) -- this is what actually keeps the
+     process alive through long background playback on OEM skins like
+     Samsung's, on top of the foreground service + wake lock. It's a
+     normal, user-visible, revocable special permission (not a runtime
+     "dangerous" one), so it won't appear on the app's own
+     App info > Permissions screen -- it lives under Settings > Apps >
+     Vinylist > Battery instead. -->
+<uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+<!--
+  Add this INSIDE the <application> tag (anywhere among its other
+  children, e.g. next to <activity>) -- it's the real native notification
+  service, not the WebView/Web MediaSession API:
+-->
+<!--
+<service
+    android:name="com.francistech.vinylist.MediaPlaybackNotificationService"
+    android:exported="false"
+    android:foregroundServiceType="mediaPlayback" />
+-->
+
+<!--
+  Also inside <application> -- the FileProvider the in-app update installer
+  uses to hand Android's package installer a content:// URI for the
+  downloaded APK (a bare file:// path is blocked across app boundaries on
+  API 24+). Matches native-src/res/xml/file_paths.xml.
+-->
+<!--
+<provider
+    android:name="androidx.core.content.FileProvider"
+    android:authorities="${applicationId}.fileprovider"
+    android:exported="false"
+    android:grantUriPermissions="true">
+    <meta-data
+        android:name="android.support.FILE_PROVIDER_PATHS"
+        android:resource="@xml/file_paths" />
+</provider>
+-->
