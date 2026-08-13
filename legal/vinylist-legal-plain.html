@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Privacy Policy and Terms of Use — Vinylist Music Player</title>
+<style>
+  *{ box-sizing:border-box; }
+  body{
+    margin:0; background:#ffffff; color:#1c1c1e;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    font-size:16px; line-height:1.6;
+  }
+  .page{ max-width:720px; margin:0 auto; padding:56px 24px 100px; }
+  h1{ font-size:28px; font-weight:700; margin:0 0 6px; letter-spacing:-0.01em; }
+  .subtitle{ color:#555; font-size:15px; margin:0 0 4px; }
+  .meta{ color:#767676; font-size:13.5px; margin:0 0 40px; }
+  h2.part-title{ font-size:22px; font-weight:700; margin:48px 0 6px; padding-top:32px; border-top:1px solid #e2e2e2; }
+  .part-sub{ color:#555; font-size:14px; margin:0 0 24px; }
+  h3{ font-size:17px; font-weight:700; margin:28px 0 8px; }
+  p{ margin:0 0 14px; color:#2b2b2b; }
+  ul{ margin:0 0 14px; padding-left:22px; color:#2b2b2b; }
+  li{ margin-bottom:6px; }
+  table{ width:100%; border-collapse:collapse; margin:8px 0 18px; font-size:14.5px; }
+  th{ text-align:left; font-weight:700; font-size:12.5px; text-transform:uppercase; letter-spacing:.03em; color:#666; padding:0 10px 8px 0; border-bottom:1px solid #ddd; }
+  td{ padding:10px 10px 10px 0; border-bottom:1px solid #eee; color:#2b2b2b; vertical-align:top; }
+  td:first-child{ font-weight:600; white-space:nowrap; }
+  hr{ border:none; border-top:1px solid #e2e2e2; margin:40px 0; }
+  strong{ font-weight:700; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <h1>Privacy Policy and Terms of Use</h1>
+  <p class="subtitle">Vinylist Music Player, published by Francis&amp;M_Tech</p>
+  <p class="meta">Effective August 13, 2026 · Package: com.francistech.vinylist</p>
+
+  <p>This document explains how Vinylist Music Player handles information on your device, and sets out the terms under which you may use the app. It is organized in two parts: the Privacy Policy first, followed by the Terms and Conditions.</p>
+
+  <h2 class="part-title">Part One: Privacy Policy</h2>
+  <p class="part-sub">How Vinylist Music Player handles information on your device.</p>
+
+  <h3>1. Short version</h3>
+  <p>Vinylist has no account, no login, no analytics, and no ad network — Francis&amp;M_Tech never sees your music library, lyrics, playlists, or listening stats. A couple of optional features you have to actively choose to use — lyrics search and update checking — send a small, specific piece of information to outside services to work. Section 6 lists exactly what.</p>
+
+  <h3>2. Who we are</h3>
+  <p>Vinylist Music Player is developed and published by Francis&amp;M_Tech, an independent software studio. This policy applies to the Vinylist Android app and its offline web build, wherever installed.</p>
+
+  <h3>3. Data we don't collect</h3>
+  <p>Vinylist has no user accounts, no sign-in, and no backend server of its own. Francis&amp;M_Tech never receives, sees, or stores:</p>
+  <ul>
+    <li>Your name, email, phone number, or any identity information</li>
+    <li>The contents of your music library, or the audio files themselves</li>
+    <li>Your lyrics, playlists, ratings, or listening history</li>
+    <li>Location, contacts, or any other device data unrelated to playing audio</li>
+  </ul>
+  <p>There is no analytics SDK and no crash-reporting service silently phoning home in the background. The only network requests the app makes are the ones you trigger yourself — see section 6.</p>
+
+  <h3>4. What's stored on your device</h3>
+  <p>To function as a music player, Vinylist saves the following locally on your device only, using your browser/OS storage (IndexedDB and local storage) — never on a remote server:</p>
+  <ul>
+    <li>Your music library — references to (or on-device copies of) audio files you add, including tracks linked directly from your phone's device library without copying the file</li>
+    <li>Playlists you create, and favorite/like/dislike ratings</li>
+    <li>Lyrics you paste in or find with lyrics search, including any Tap Sync timing you record</li>
+    <li>Listening statistics used to build your weekly Report</li>
+    <li>App preferences — theme, skin (Glassmorphism, Vintage Tape Deck, or Neumorphism), visualizer style, equalizer curve, playback speed, and similar settings</li>
+  </ul>
+  <p>Because all of this lives only on your device, Francis&amp;M_Tech has no way to access, recover, or view it — including if you contact us for support. You remain solely responsible for this content, as set out in Part Two.</p>
+
+  <h3>5. Permissions we request</h3>
+  <p>The Android app requests the following device permissions. None are used to collect or transmit data about you — each exists solely to make a specific feature work:</p>
+  <table>
+    <tr><th>Permission</th><th>Why Vinylist asks for it</th></tr>
+    <tr><td>Audio / storage read</td><td>Lets you pick songs and folders, or link tracks from your device's media library, to add to Vinylist. Files are read to play them — nothing is uploaded.</td></tr>
+    <tr><td>Storage write (Android 12 and below)</td><td>Only used if you tap "Save a copy to phone" for a track's lyrics — writes that one file to Documents/Music Lyrics. Not needed on Android 13+.</td></tr>
+    <tr><td>Foreground service</td><td>Keeps playback and lock-screen controls running reliably while you use other apps.</td></tr>
+    <tr><td>Wake lock</td><td>Prevents playback from being interrupted when the screen turns off.</td></tr>
+    <tr><td>Notifications</td><td>Used only for local alerts you trigger yourself, such as "your weekly report is ready." Never used for marketing.</td></tr>
+    <tr><td>Internet</td><td>Only used when you tap Search lyrics online, or Check for updates. See section 6.</td></tr>
+    <tr><td>Install unknown apps</td><td>Only requested if you download an in-app update and tap Install.</td></tr>
+    <tr><td>Unrestricted battery use</td><td>Optional, off by default. Stops your phone's battery manager from pausing background playback. Never used to collect data.</td></tr>
+  </table>
+  <p>You can review or revoke any of these at any time in your device's Settings, under Apps, then Vinylist, then Permissions (battery use is under Settings, Apps, Vinylist, Battery).</p>
+
+  <h3>6. Third-party resources</h3>
+  <p>Vinylist loads its typefaces and a small number of open-source code libraries (used for its interface and icons) from public content-delivery networks the first time it's installed, after which they're cached and the app runs fully offline.</p>
+  <p>Two features make their own network requests, only when you deliberately start them:</p>
+  <ul>
+    <li><strong>Lyrics search</strong> — sends the song title and artist you enter to three independent lyrics lookup services (lrclib.net, lyrics.ovh, and textyl.co) and shows you whatever they return. Nothing else about you or your library is sent.</li>
+    <li><strong>App updates</strong> — checking for updates queries GitHub's public release API (api.github.com); downloading one fetches the file directly from GitHub. No personal data is included in either request.</li>
+  </ul>
+  <p>None of these services are operated by Francis&amp;M_Tech, and none of them receive your library, lyrics, playlists, or listening activity.</p>
+
+  <h3>7. Children's privacy</h3>
+  <p>Vinylist is not directed at children under 13 and does not knowingly collect information from anyone, regardless of age. If you believe a child has provided us information through the contact details below, let us know and we'll delete it.</p>
+
+  <h3>8. Retention and deletion</h3>
+  <p>Your data is retained on-device for as long as you keep the app installed. To remove everything Vinylist has ever stored, uninstall the app, or clear its storage and data from your device's App info screen. Either action permanently and immediately deletes your library, lyrics, ratings, stats, and settings, since no copy exists anywhere else.</p>
+
+  <h3>9. Security</h3>
+  <p>Because your data never leaves your device, the main safeguard is your device's own lock screen and storage encryption. We recommend keeping your phone's OS updated and using a screen lock, as you would for any app storing personal media.</p>
+
+  <h3>10. Changes to this policy</h3>
+  <p>We may update this Privacy Policy as Vinylist evolves. Material changes will be reflected by updating the effective date at the top of this document. Continuing to use Vinylist after an update means you accept the revised policy.</p>
+
+  <h2 class="part-title">Part Two: Terms and Conditions</h2>
+  <p class="part-sub">The rules for using Vinylist Music Player.</p>
+
+  <h3>1. Acceptance</h3>
+  <p>By installing or using Vinylist, you agree to these Terms and Conditions in full. If you don't agree, please don't use the app.</p>
+
+  <h3>2. What Vinylist is</h3>
+  <p>Vinylist is a personal, offline-first music player. It plays audio files, displays lyrics, and tracks listening habits entirely on your own device. It also includes optional features — online lyrics lookup and in-app update checking — that briefly reach outside services when you choose to use them. It does not host, distribute, stream, or provide any music, lyrics, or other copyrighted content of its own — you supply everything it plays.</p>
+
+  <h3>3. License to use</h3>
+  <p>Francis&amp;M_Tech grants you a personal, non-exclusive, non-transferable, revocable license to install and use Vinylist on devices you own or control, for your own personal, non-commercial listening. You may not resell, sublicense, rent, or redistribute the app itself.</p>
+
+  <h3>4. Your content</h3>
+  <p>You're solely responsible for the audio files, lyrics, and playlists you import into Vinylist, and for making sure you have the legal right to possess and play them. Francis&amp;M_Tech does not review, host, or have any access to your library — nothing you import is transmitted anywhere. This applies equally to lyrics retrieved through online lyrics search.</p>
+  <p>Vinylist must not be used to infringe anyone's copyright or other rights. Responsibility for the legality of imported or retrieved content rests entirely with you.</p>
+
+  <h3>5. Intellectual property</h3>
+  <p>The Vinylist name, logo, interface design, and underlying code are the property of Francis&amp;M_Tech and are protected by applicable intellectual property laws. These Terms don't grant you any rights to Francis&amp;M_Tech's trademarks or branding beyond normal use of the app.</p>
+  <p>You retain all rights to the audio, lyrics, and playlists you personally import — Vinylist claims no ownership over your content.</p>
+
+  <h3>6. Device permissions</h3>
+  <p>To function, the app requests permission to read audio/media on your device, run a foreground playback service, keep the device awake during playback, show local notifications, and — for features you opt into — access the internet, install downloaded updates, and (optionally) run unrestricted in the background. Each is described in full in Part One.</p>
+
+  <h3>7. Third-party services</h3>
+  <p>Lyrics search and update checking (Part One, section 6) send requests to services Francis&amp;M_Tech does not operate, only when you start them. Your use of these features is also subject to those services' own terms. Francis&amp;M_Tech isn't responsible for the accuracy, availability, or content of lyrics returned by third-party lookup services.</p>
+
+  <h3>8. Acceptable use</h3>
+  <p>You agree not to:</p>
+  <ul>
+    <li>Reverse-engineer, decompile, or tamper with the app in an attempt to circumvent its licensing or intended function</li>
+    <li>Use Vinylist for any unlawful purpose, or to store or play content you don't have the right to use</li>
+    <li>Attempt to interfere with the app's stability, its update mechanism, or another user's device through it</li>
+  </ul>
+
+  <h3>9. No warranty</h3>
+  <p>Vinylist is provided "as is" and "as available," without warranties of any kind, express or implied. Francis&amp;M_Tech does not guarantee the app — or any third-party service it optionally connects to — will be error-free, secure, or uninterrupted, or that it will meet your specific requirements.</p>
+
+  <h3>10. Limitation of liability</h3>
+  <p>To the fullest extent permitted by law, Francis&amp;M_Tech is not liable for any indirect, incidental, or consequential damages arising from your use of Vinylist — including loss of your music library, playlists, lyrics, or listening stats, or any device issue resulting from app use or an installed update. Because your data lives only on your device, we strongly recommend keeping your own backups of anything irreplaceable.</p>
+
+  <h3>11. Termination</h3>
+  <p>You may stop using Vinylist at any time by uninstalling it. Francis&amp;M_Tech reserves the right to discontinue or modify the app, or any of the third-party services it optionally connects to, at its discretion. Since Vinylist has no accounts or server, there is nothing further for Francis&amp;M_Tech to terminate on its end beyond ceasing updates.</p>
+
+  <h3>12. Governing law</h3>
+  <p>These Terms are governed by the laws of Uganda, without regard to conflict-of-law principles, unless a different jurisdiction is required by the law applicable to you as a consumer.</p>
+
+  <h3>13. Changes to these terms</h3>
+  <p>These Terms may be updated as Vinylist evolves. Material changes will be reflected by updating the effective date above. Continuing to use Vinylist after an update means you accept the revised Terms.</p>
+
+  <hr>
+
+  <h3>Contact</h3>
+  <p>Questions about either part of this document can be sent to Francis&amp;M_Tech via WhatsApp (+256 760 176031) or email at francismasereka477@gmail.com.</p>
+
+  <p class="meta">© 2026 Francis&amp;M_Tech. Vinylist Music Player.</p>
+
+</div>
+</body>
+</html>
