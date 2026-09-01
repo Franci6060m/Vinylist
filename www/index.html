@@ -5340,6 +5340,7 @@ function PeopleSearchSheet({ theme, skin, session, showToast, onClose }) {
   const [loading, setLoading] = useState(false);
   const [followingIds, setFollowingIds] = useState(() => new Set());
   const [busyId, setBusyId] = useState(null);
+  const [viewingProfileId, setViewingProfileId] = useState(null);
   const panelBg = skin === 'glass' ? undefined : skin === 'neu' ? 'var(--neu-bg)' : theme.surface;
 
   useEffect(() => {
@@ -5355,7 +5356,7 @@ function PeopleSearchSheet({ theme, skin, session, showToast, onClose }) {
     setLoading(true);
     const t = setTimeout(async () => {
       const { data } = await supabaseClient.from('profiles')
-        .select('id, username, display_name, bio, is_verified, role_label')
+        .select('id, username, display_name, avatar_url, bio, is_verified, role_label')
         .or(`username.ilike.%${q}%,display_name.ilike.%${q}%`)
         .limit(25);
       if (!cancelled) { setResults(data || []); setLoading(false); }
@@ -5408,23 +5409,25 @@ function PeopleSearchSheet({ theme, skin, session, showToast, onClose }) {
               const isSelf = session?.user?.id === p.id;
               return (
                 <div key={p.id} className="rowhover" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 6px', borderRadius: 10 }}>
-                  <div style={{ width: 38, height: 38, borderRadius: '50%', flexShrink: 0, background: `linear-gradient(135deg, ${theme.accent2}, ${theme.accent})`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <User size={16} color={theme.bg} />
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{p.display_name || p.username}</span>
-                      {p.is_verified && <VerifiedBadge size={12} />}
-                      {p.role_label && <RoleBadge label={p.role_label} theme={theme} skin={skin} />}
+                  <button onClick={() => setViewingProfileId(p.id)} style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0, border: 'none', background: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', font: 'inherit', color: 'inherit' }}>
+                    <div style={{ width: 38, height: 38, borderRadius: '50%', flexShrink: 0, overflow: 'hidden', background: p.avatar_url ? theme.surface2 : `linear-gradient(135deg, ${theme.accent2}, ${theme.accent})`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {p.avatar_url ? <img src={p.avatar_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <User size={16} color={theme.bg} />}
                     </div>
-                    <div style={{ fontSize: 11.5, color: theme.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>@{p.username}</div>
-                  </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{p.display_name || p.username}</span>
+                        {p.is_verified && <VerifiedBadge size={12} />}
+                        {p.role_label && <RoleBadge label={p.role_label} theme={theme} skin={skin} />}
+                      </div>
+                      <div style={{ fontSize: 11.5, color: theme.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>@{p.username}</div>
+                    </div>
+                  </button>
                   {!isSelf && (
                     <button onClick={() => toggleFollow(p.id)} disabled={busyId === p.id} className="press" style={{
                       display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, fontWeight: 700, cursor: 'pointer',
                       border: isFollowing ? `1px solid ${theme.surface2}` : 'none',
                       background: isFollowing ? 'transparent' : theme.accent, color: isFollowing ? theme.muted : theme.bg,
-                      borderRadius: 999, padding: '6px 12px',
+                      borderRadius: 999, padding: '6px 12px', flexShrink: 0,
                     }}>
                       {isFollowing ? <UserCheck size={13} /> : <UserPlus size={13} />} {isFollowing ? 'Following' : 'Follow'}
                     </button>
@@ -5435,6 +5438,150 @@ function PeopleSearchSheet({ theme, skin, session, showToast, onClose }) {
           </div>
         )}
       </div>
+      {viewingProfileId && (
+        <UserProfileSheet theme={theme} skin={skin} session={session} userId={viewingProfileId} showToast={showToast} onClose={() => setViewingProfileId(null)} />
+      )}
+    </div>
+  );
+}
+
+/** Full profile view for one account \u2014 opened by tapping a username or
+ *  avatar anywhere in the app. Follower/following counts are only ever
+ *  shown to the profile's own owner; everyone else sees Follow + Message
+ *  instead, same privacy shape as most social apps. Tapping the avatar
+ *  opens it full-size over everything else. */
+function UserProfileSheet({ theme, skin, session, userId, onClose, showToast }) {
+  const myId = session?.user?.id || null;
+  const isOwner = myId && myId === userId;
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [followerCount, setFollowerCount] = useState(null);
+  const [followingCount, setFollowingCount] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [imageOpen, setImageOpen] = useState(false);
+  const panelBg = skin === 'glass' ? undefined : skin === 'neu' ? 'var(--neu-bg)' : theme.surface;
+
+  useEffect(() => {
+    if (!supabaseClient || !userId) return;
+    let cancelled = false;
+    setLoading(true);
+    setProfile(null);
+
+    (async () => {
+      const { data: p } = await supabaseClient.from('profiles')
+        .select('id, username, display_name, bio, avatar_url, is_verified, role_label')
+        .eq('id', userId).maybeSingle();
+      if (cancelled) return;
+      setProfile(p || null);
+      setLoading(false);
+
+      if (isOwner) {
+        const [{ count: followers }, { count: following }] = await Promise.all([
+          supabaseClient.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', userId),
+          supabaseClient.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', userId),
+        ]);
+        if (!cancelled) { setFollowerCount(followers ?? 0); setFollowingCount(following ?? 0); }
+      } else if (myId) {
+        const { data: f } = await supabaseClient.from('follows').select('follower_id')
+          .eq('follower_id', myId).eq('following_id', userId).maybeSingle();
+        if (!cancelled) setIsFollowing(!!f);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [userId, isOwner, myId]);
+
+  async function toggleFollow() {
+    if (!myId) { showToast?.('Sign in from Settings \u2192 Account to follow people'); return; }
+    setBusy(true);
+    const { error } = isFollowing
+      ? await supabaseClient.from('follows').delete().eq('follower_id', myId).eq('following_id', userId)
+      : await supabaseClient.from('follows').insert({ follower_id: myId, following_id: userId });
+    if (!error) setIsFollowing(f => !f);
+    else showToast?.("Couldn't update that follow");
+    setBusy(false);
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 130, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18, background: 'rgba(0,0,0,0.5)' }} onClick={onClose}>
+      <div className={`fade-up ${skin === 'glass' ? 'glasspanel' : skin === 'neu' ? 'neupanel' : ''}`} onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 380, borderRadius: 20, padding: 22, background: panelBg }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 4 }}>
+          <IconButton theme={theme} skin={skin} size="sm" label="Close" onClick={onClose}><X size={16} /></IconButton>
+        </div>
+
+        {loading ? (
+          <div style={{ fontSize: 12, color: theme.muted, textAlign: 'center', padding: '24px 10px' }}>Loading\u2026</div>
+        ) : !profile ? (
+          <div style={{ fontSize: 12, color: theme.muted, textAlign: 'center', padding: '24px 10px' }}>Couldn\u2019t find that profile.</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+            <button
+              onClick={() => profile.avatar_url && setImageOpen(true)}
+              disabled={!profile.avatar_url}
+              style={{ border: 'none', background: 'none', padding: 0, cursor: profile.avatar_url ? 'pointer' : 'default', marginBottom: 12 }}
+              aria-label="View full photo"
+            >
+              <div style={{ width: 84, height: 84, borderRadius: '50%', overflow: 'hidden', background: profile.avatar_url ? theme.surface2 : `linear-gradient(135deg, ${theme.accent2}, ${theme.accent})`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {profile.avatar_url ? <img src={profile.avatar_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <User size={32} color={theme.bg} />}
+              </div>
+            </button>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 16, fontWeight: 800 }}>
+              {profile.display_name || profile.username}{profile.is_verified && <VerifiedBadge size={14} />}
+            </div>
+            <div style={{ fontSize: 12.5, color: theme.muted, marginTop: 2 }}>{'@'}{profile.username}</div>
+            {profile.role_label && <div style={{ marginTop: 8 }}><RoleBadge label={profile.role_label} theme={theme} skin={skin} /></div>}
+            {profile.bio && <div style={{ fontSize: 12.5, color: theme.text, marginTop: 12, lineHeight: 1.5 }}>{profile.bio}</div>}
+
+            {isOwner ? (
+              <div style={{ display: 'flex', gap: 22, marginTop: 18 }}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 15, fontWeight: 800 }}>{followerCount ?? '\u2013'}</div>
+                  <div style={{ fontSize: 10.5, color: theme.muted }}>Followers</div>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 15, fontWeight: 800 }}>{followingCount ?? '\u2013'}</div>
+                  <div style={{ fontSize: 10.5, color: theme.muted }}>Following</div>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', gap: 8, marginTop: 18, width: '100%' }}>
+                <button onClick={toggleFollow} disabled={busy} className="press" style={{
+                  flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
+                  border: isFollowing ? `1px solid ${theme.surface2}` : 'none',
+                  background: isFollowing ? 'transparent' : theme.accent, color: isFollowing ? theme.muted : theme.bg,
+                  borderRadius: 999, padding: '9px 0',
+                }}>
+                  {isFollowing ? <UserCheck size={14} /> : <UserPlus size={14} />} {isFollowing ? 'Following' : 'Follow'}
+                </button>
+                <button onClick={() => showToast?.('Direct messages aren\u2019t available yet')} className="press" style={{
+                  flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
+                  border: `1px solid ${theme.surface2}`, background: 'transparent', color: theme.text, borderRadius: 999, padding: '9px 0',
+                }}>
+                  <MessageCircle size={14} /> Message
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {imageOpen && profile?.avatar_url && (
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 140, background: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+          onClick={e => { e.stopPropagation(); setImageOpen(false); }}
+        >
+          <img src={profile.avatar_url} style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: 12, objectFit: 'contain' }} />
+          <button
+            onClick={e => { e.stopPropagation(); setImageOpen(false); }}
+            style={{ position: 'absolute', top: 18, right: 18, width: 36, height: 36, borderRadius: '50%', border: 'none', background: 'rgba(255,255,255,0.15)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+            aria-label="Close photo"
+          >
+            <X size={18} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -6115,6 +6262,7 @@ const HANGOUT_GAMES = [
   { id: 'ludo', name: 'Ludo', Icon: Dices, players: 'Up to 4 players' },
   { id: 'snakes', name: 'Snakes & Ladders', Icon: Grid3x3, players: 'Up to 4 players' },
   { id: 'matatu', name: 'Matatu', Icon: Gamepad2, players: 'Up to 4 players' },
+  { id: 'wyr', name: 'Would You Rather', Icon: HelpCircle, players: 'Up to 4 players' },
 ];
 
 function HangoutView({ theme, skin, amoled, session, profile, onlineUserIds, room, setRoom, onClose, showToast }) {
@@ -6124,6 +6272,8 @@ function HangoutView({ theme, skin, amoled, session, profile, onlineUserIds, roo
   const [ludoPlayers, setLudoPlayers] = useState(4);
   const [snlPlayers, setSnlPlayers] = useState(4);
   const [matatuPlayers, setMatatuPlayers] = useState(4);
+  const [wyrPlayers, setWyrPlayers] = useState(2);
+  const [viewingProfileId, setViewingProfileId] = useState(null);
 
   useEffect(() => {
     if (!supabaseClient || !session?.user) { setFriends([]); return; }
@@ -6165,13 +6315,15 @@ function HangoutView({ theme, skin, amoled, session, profile, onlineUserIds, roo
           {room.opponent?.role_label && <RoleBadge label={room.opponent.role_label} theme={theme} skin={skin} />}
         </div>
         {room.game === 'chess' ? (
-          <ChessGame theme={theme} skin={skin} session={session} room={room} showToast={showToast} />
+          <ChessGame theme={theme} skin={skin} session={session} room={room} showToast={showToast} profile={profile} onOpenProfile={setViewingProfileId} />
         ) : room.game === 'ludo' ? (
-          <LudoGame theme={theme} skin={skin} session={session} room={room} showToast={showToast} />
+          <LudoGame theme={theme} skin={skin} session={session} room={room} showToast={showToast} profile={profile} onOpenProfile={setViewingProfileId} />
         ) : room.game === 'snakes' ? (
-          <SnakesGame theme={theme} skin={skin} session={session} room={room} showToast={showToast} />
+          <SnakesGame theme={theme} skin={skin} session={session} room={room} showToast={showToast} profile={profile} onOpenProfile={setViewingProfileId} />
         ) : room.game === 'matatu' ? (
-          <MatatuGame theme={theme} skin={skin} session={session} room={room} showToast={showToast} />
+          <MatatuGame theme={theme} skin={skin} session={session} room={room} showToast={showToast} profile={profile} onOpenProfile={setViewingProfileId} />
+        ) : room.game === 'wyr' ? (
+          <WouldYouRatherGame theme={theme} skin={skin} session={session} room={room} showToast={showToast} profile={profile} onOpenProfile={setViewingProfileId} />
         ) : (
           <div className={panelClass} style={{ ...panelStyle, flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 24 }}>
             <div>
@@ -6181,6 +6333,9 @@ function HangoutView({ theme, skin, amoled, session, profile, onlineUserIds, roo
             </div>
           </div>
         )}
+        {viewingProfileId && (
+          <UserProfileSheet theme={theme} skin={skin} session={session} userId={viewingProfileId} showToast={showToast} onClose={() => setViewingProfileId(null)} />
+        )}
       </div>
     );
   }
@@ -6188,7 +6343,7 @@ function HangoutView({ theme, skin, amoled, session, profile, onlineUserIds, roo
   const startRoom = (gameId, mode) => {
     if (mode === 'online' && !selectedFriendId) { showToast?.('Pick a friend first'); return; }
     const opponent = mode === 'online' ? friends.find(f => f.id === selectedFriendId) : null;
-    const playerCount = gameId === 'ludo' ? ludoPlayers : gameId === 'snakes' ? snlPlayers : gameId === 'matatu' ? matatuPlayers : undefined;
+    const playerCount = gameId === 'ludo' ? ludoPlayers : gameId === 'snakes' ? snlPlayers : gameId === 'matatu' ? matatuPlayers : gameId === 'wyr' ? wyrPlayers : undefined;
     setRoom({ game: gameId, opponent, mode, playerCount });
   };
 
@@ -6218,9 +6373,10 @@ function HangoutView({ theme, skin, amoled, session, profile, onlineUserIds, roo
             const isOnline = onlineUserIds.has(f.id);
             const isSelected = selectedFriendId === f.id;
             return (
-              <button
+              <div
                 key={f.id}
                 onClick={() => setSelectedFriendId(isSelected ? null : f.id)}
+                role="button" tabIndex={0}
                 className={`press ${panelClass || ''}`}
                 style={{
                   ...panelStyle, display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
@@ -6228,21 +6384,28 @@ function HangoutView({ theme, skin, amoled, session, profile, onlineUserIds, roo
                   cursor: 'pointer', padding: '10px 12px', color: theme.text, font: 'inherit',
                 }}
               >
-                <div style={{ position: 'relative', width: 34, height: 34, flexShrink: 0 }}>
+                <button
+                  onClick={e => { e.stopPropagation(); setViewingProfileId(f.id); }}
+                  style={{ position: 'relative', width: 34, height: 34, flexShrink: 0, border: 'none', background: 'none', padding: 0, cursor: 'pointer' }}
+                  aria-label={`View ${f.display_name || f.username}'s profile`}
+                >
                   <div style={{ width: 34, height: 34, borderRadius: '50%', overflow: 'hidden', background: f.avatar_url ? theme.surface2 : `linear-gradient(135deg, ${theme.accent2}, ${theme.accent})`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     {f.avatar_url ? <img src={f.avatar_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <User size={16} color={theme.bg} />}
                   </div>
                   <Circle size={10} fill={isOnline ? '#22c55e' : theme.muted} color={theme.bg} strokeWidth={2} style={{ position: 'absolute', bottom: -1, right: -1, borderRadius: '50%' }} />
-                </div>
+                </button>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.display_name || f.username}</span>
+                    <span
+                      onClick={e => { e.stopPropagation(); setViewingProfileId(f.id); }}
+                      style={{ fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer' }}
+                    >{f.display_name || f.username}</span>
                     {f.is_verified && <VerifiedBadge size={12} />}
                     {f.role_label && <RoleBadge label={f.role_label} theme={theme} skin={skin} />}
                   </div>
                   <div style={{ fontSize: 11, color: theme.muted }}>{'@'}{f.username}{' \u00b7 '}{isOnline ? 'Online' : 'Offline'}</div>
                 </div>
-              </button>
+              </div>
             );
           })}
         </div>
@@ -6258,11 +6421,11 @@ function HangoutView({ theme, skin, amoled, session, profile, onlineUserIds, roo
             <g.Icon size={22} color={theme.accent} style={{ marginBottom: 8 }} />
             <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 2 }}>{g.name}</div>
             <div style={{ fontSize: 10.5, color: theme.muted, marginBottom: 10 }}>{g.players}</div>
-            {(g.id === 'ludo' || g.id === 'snakes' || g.id === 'matatu') && (
+            {(g.id === 'ludo' || g.id === 'snakes' || g.id === 'matatu' || g.id === 'wyr') && (
               <div style={{ display: 'flex', gap: 5, marginBottom: 8 }}>
                 {[2, 3, 4].map(n => {
-                  const val = g.id === 'ludo' ? ludoPlayers : g.id === 'snakes' ? snlPlayers : matatuPlayers;
-                  const setVal = g.id === 'ludo' ? setLudoPlayers : g.id === 'snakes' ? setSnlPlayers : setMatatuPlayers;
+                  const val = g.id === 'ludo' ? ludoPlayers : g.id === 'snakes' ? snlPlayers : g.id === 'matatu' ? matatuPlayers : wyrPlayers;
+                  const setVal = g.id === 'ludo' ? setLudoPlayers : g.id === 'snakes' ? setSnlPlayers : g.id === 'matatu' ? setMatatuPlayers : setWyrPlayers;
                   return (
                     <button key={n} onClick={() => setVal(n)} className={skin === 'neu' ? 'neu-press' : 'press'} style={{ flex: 1, borderRadius: 8, padding: '5px 0', fontSize: 10.5, fontWeight: 700, cursor: 'pointer', ...segStyle(theme, skin, val === n) }}>{n}p</button>
                   );
@@ -6281,7 +6444,7 @@ function HangoutView({ theme, skin, amoled, session, profile, onlineUserIds, roo
                   </button>
                 </>
               )}
-              {(g.id === 'ludo' || g.id === 'snakes' || g.id === 'matatu') && (
+              {(g.id === 'ludo' || g.id === 'snakes' || g.id === 'matatu' || g.id === 'wyr') && (
                 <button onClick={() => startRoom(g.id, 'bot')} className={skin === 'neu' ? 'neu-press' : 'press'} style={{ borderRadius: 10, padding: '7px 0', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, ...segStyle(theme, skin, false) }}>
                   <Bot size={13} /> vs Computer
                 </button>
@@ -6291,6 +6454,9 @@ function HangoutView({ theme, skin, amoled, session, profile, onlineUserIds, roo
           </div>
         ))}
       </div>
+      {viewingProfileId && (
+        <UserProfileSheet theme={theme} skin={skin} session={session} userId={viewingProfileId} showToast={showToast} onClose={() => setViewingProfileId(null)} />
+      )}
     </div>
   );
 }
@@ -6343,7 +6509,7 @@ function chessMovePairs(history) {
 }
 
 // Online games never persist past the game itself \u2014 the row exists only
-function ChessGame({ theme, skin, session, room, showToast }) {
+function ChessGame({ theme, skin, session, room, showToast, profile, onOpenProfile }) {
   const myId = session?.user?.id || null;
   const opponent = room.opponent || null;
   const isOnline = room.mode === 'online' && !!opponent && !!myId;
@@ -6363,6 +6529,7 @@ function ChessGame({ theme, skin, session, room, showToast }) {
   const [botThinking, setBotThinking] = useState(false);
   const botWorkerRef = useRef(null);
   const channelRef = useRef(null);
+  const [chatMessages, setChatMessages] = useState([]);
 
   const connecting = isOnline && (!channelReady || !opponentPresent);
 
@@ -6455,6 +6622,7 @@ function ChessGame({ theme, skin, session, room, showToast }) {
     setMyColor(myId < opponent.id ? 'w' : 'b');
     setChannelReady(false);
     setOpponentPresent(false);
+    setChatMessages([]);
 
     const pairKey = [myId, opponent.id].sort().join('-');
     const channel = supabaseClient.channel(`chess-bc-${pairKey}`, {
@@ -6480,6 +6648,7 @@ function ChessGame({ theme, skin, session, room, showToast }) {
         setFen(CHESS_START_FEN); setStatus('active'); setWinner(null);
         setSelected(null); setLastMove(null); setPendingPromotion(null);
       })
+      .on('broadcast', { event: 'chat' }, ({ payload }) => setChatMessages(m => [...m, payload]))
       .subscribe(async (subStatus) => {
         if (subStatus === 'SUBSCRIBED') {
           setChannelReady(true);
@@ -6493,6 +6662,12 @@ function ChessGame({ theme, skin, session, room, showToast }) {
     return () => { supabaseClient.removeChannel(channel); channelRef.current = null; };
     // eslint-disable-next-line
   }, [isOnline, myId, opponent?.id]);
+
+  function sendChat(text) {
+    const msg = { text, senderId: myId, ts: Date.now() };
+    setChatMessages(m => [...m, msg]);
+    channelRef.current?.send({ type: 'broadcast', event: 'chat', payload: msg });
+  }
 
   const canInteract = !pendingPromotion && status === 'active' && !connecting && !botThinking &&
     (!isOnline || myColor === turn) && (!isBot || turn === 'w');
@@ -6603,8 +6778,21 @@ function ChessGame({ theme, skin, session, room, showToast }) {
     statusText = `${colorLabel(turn)} to move`;
   }
 
+  const chessPlayers = ['w', 'b'].map(color => ({
+    color,
+    hex: color === 'w' ? '#f1f1f1' : '#3a3a3a',
+    isBot: isBot && color !== 'w',
+    name: colorLabel(color),
+    account: isOnline ? (color === myColor ? profile : opponent) : null,
+  }));
+
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative' }}>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+        {chessPlayers.map(p => (
+          <GamePlayerPill key={p.color} p={p} active={p.color === turn && status === 'active' && !connecting} theme={theme} skin={skin} onOpenProfile={onOpenProfile} />
+        ))}
+      </div>
       <div className={panelClass} style={{ background: panelBg, borderRadius: 12, padding: '9px 12px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
         <Circle size={8} fill={statusTone === 'win' ? '#22c55e' : statusTone === 'lose' ? theme.muted : theme.accent} color={theme.bg} strokeWidth={0} />
         <div style={{ flex: 1, fontSize: 12.5, fontWeight: 700, color: theme.text }}>{statusText}</div>
@@ -6683,7 +6871,7 @@ function ChessGame({ theme, skin, session, room, showToast }) {
 
         {connecting && (
           <div style={{ position: 'absolute', inset: 0, background: `${theme.bg}cc`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ fontSize: 12, color: theme.muted, fontWeight: 600 }}>Connecting\u2026</div>
+            <div style={{ fontSize: 12, color: theme.muted, fontWeight: 600 }}>Connecting…</div>
           </div>
         )}
 
@@ -6719,6 +6907,7 @@ function ChessGame({ theme, skin, session, room, showToast }) {
           </button>
         )}
       </div>
+      {isOnline && <GameChatBox theme={theme} skin={skin} messages={chatMessages} onSend={sendChat} myId={myId} disabled={connecting} />}
     </div>
   );
 }
@@ -6739,6 +6928,123 @@ function ChessGame({ theme, skin, session, room, showToast }) {
 const LUDO_COLORS = ['r', 'g', 'y', 'b'];
 const LUDO_COLOR_HEX = { r: '#ef4444', g: '#22c55e', y: '#eab308', b: '#3b82f6' };
 const LUDO_COLOR_NAME = { r: 'Red', g: 'Green', y: 'Yellow', b: 'Blue' };
+
+// Shared player-identity pill used across Ludo/Snakes & Ladders/Matatu/Would
+// You Rather. `p.account` (a profiles row \u2014 avatar_url/username/is_verified)
+// is only set for real accounts (you, or an online opponent); local
+// pass-and-play seats and the computer have none, so they fall back to a
+// plain colored dot + label exactly as before.
+function GamePlayerPill({ p, active, theme, skin, right, onOpenProfile }) {
+  const acc = p.account;
+  const dot = <div style={{ width: 8, height: 8, borderRadius: '50%', background: p.hex }} />;
+  const tappable = !!(acc?.id && onOpenProfile);
+  return (
+    <div
+      onClick={tappable ? () => onOpenProfile(acc.id) : undefined}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 6, padding: acc ? '3px 10px 3px 3px' : '4px 9px', borderRadius: 999,
+        background: active ? `${p.hex}33` : 'transparent', border: `1px solid ${p.hex}55`,
+        cursor: tappable ? 'pointer' : 'default',
+      }}
+    >
+      {acc?.avatar_url ? (
+        <div style={{ width: 20, height: 20, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, border: `1.5px solid ${p.hex}` }}>
+          <img src={acc.avatar_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        </div>
+      ) : acc ? (
+        <div style={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, background: `${p.hex}33`, border: `1.5px solid ${p.hex}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <User size={11} color={p.hex} />
+        </div>
+      ) : dot}
+      <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15, gap: acc?.role_label ? 2 : 0 }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 10.5, fontWeight: 700, color: theme.text }}>
+          {p.name}{acc?.is_verified && <VerifiedBadge size={10} />}
+        </span>
+        {acc?.username && <span style={{ fontSize: 8.5, color: theme.muted }}>{'@'}{acc.username}</span>}
+        {acc?.role_label && <RoleBadge label={acc.role_label} theme={theme} skin={skin} />}
+      </div>
+      {right}
+    </div>
+  );
+}
+
+// Floating chat bubble + panel, dropped into any online game room. Reuses
+// that game's own Realtime Broadcast channel (event: 'chat') \u2014 same
+// ephemeral, nothing-persisted pattern as moves/state, so there's no chat
+// history once everyone leaves the room.
+function GameChatBox({ theme, skin, messages, onSend, myId, disabled }) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [seenCount, setSeenCount] = useState(0);
+  const listRef = useRef(null);
+  const panelClass = skin === 'glass' ? 'glasspanel-lite' : skin === 'neu' ? 'neupanel-lite' : undefined;
+  const panelBg = skin === 'glass' ? undefined : skin === 'neu' ? 'var(--neu-bg)' : `${theme.surface}f2`;
+  const unread = open ? 0 : Math.max(0, messages.length - seenCount);
+
+  useEffect(() => {
+    if (open) { setSeenCount(messages.length); if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight; }
+  }, [open, messages.length]);
+
+  function submit(e) {
+    e?.preventDefault();
+    const text = draft.trim();
+    if (!text || disabled) return;
+    onSend(text);
+    setDraft('');
+  }
+
+  return (
+    <>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className={skin === 'neu' ? 'neu-press' : 'press'}
+        style={{
+          position: 'absolute', bottom: 10, right: 10, zIndex: 6, width: 38, height: 38, borderRadius: '50%',
+          border: 'none', background: theme.accent, color: theme.bg, cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 6px 16px -6px rgba(0,0,0,0.5)',
+        }}
+      >
+        {open ? <X size={16} /> : <MessageCircle size={16} />}
+        {unread > 0 && (
+          <span style={{ position: 'absolute', top: -3, right: -3, minWidth: 15, height: 15, borderRadius: 999, background: '#ef4444', color: '#fff', fontSize: 9, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px' }}>{unread}</span>
+        )}
+      </button>
+
+      {open && (
+        <div className={panelClass} style={{
+          position: 'absolute', bottom: 54, right: 10, zIndex: 6, width: 220, maxWidth: '78%', maxHeight: 260,
+          background: panelBg, backdropFilter: skin === 'glass' ? undefined : 'blur(8px)', borderRadius: 14,
+          display: 'flex', flexDirection: 'column', boxShadow: '0 10px 26px -12px rgba(0,0,0,0.55)', overflow: 'hidden',
+        }}>
+          <div ref={listRef} style={{ flex: 1, minHeight: 90, maxHeight: 190, overflowY: 'auto', padding: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {messages.length === 0 ? (
+              <div style={{ fontSize: 11, color: theme.muted, textAlign: 'center', marginTop: 20 }}>Say hi\u2026</div>
+            ) : messages.map((m, i) => (
+              <div key={i} style={{ alignSelf: m.senderId === myId ? 'flex-end' : 'flex-start', maxWidth: '85%' }}>
+                <div style={{
+                  fontSize: 11.5, padding: '6px 10px', borderRadius: 12, lineHeight: 1.35, wordBreak: 'break-word',
+                  background: m.senderId === myId ? theme.accent : `${theme.muted}26`,
+                  color: m.senderId === myId ? theme.bg : theme.text,
+                }}>
+                  {m.text}
+                </div>
+              </div>
+            ))}
+          </div>
+          <form onSubmit={submit} style={{ display: 'flex', gap: 5, padding: 7, borderTop: `1px solid ${theme.muted}22` }}>
+            <input
+              value={draft} onChange={e => setDraft(e.target.value)} placeholder="Message\u2026" disabled={disabled}
+              style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', background: `${theme.bg}88`, color: theme.text, borderRadius: 999, padding: '7px 11px', fontSize: 11.5, font: 'inherit' }}
+            />
+            <button type="submit" disabled={disabled || !draft.trim()} style={{ border: 'none', background: 'none', color: theme.accent, cursor: 'pointer', display: 'flex', alignItems: 'center', opacity: draft.trim() ? 1 : 0.4 }}>
+              <Send size={16} />
+            </button>
+          </form>
+        </div>
+      )}
+    </>
+  );
+}
 
 // Red's arm only \u2014 the other three are this, rotated.
 const LUDO_QUADRANT = [
@@ -6805,12 +7111,36 @@ function ludoCellForToken(color, pos) {
   return LUDO_HOME_COLUMNS[color][pos - 51];
 }
 
-function ludoComputeMovable(color, diceVal, tokensState) {
+// A "block": 2+ of the same color sharing one square on the shared 52-cell
+// loop. Enemy tokens may neither land on it nor pass over it \u2014 it acts as
+// a wall. Own-color tokens ignore their own blocks. Squares already inside a
+// color's private home stretch (pos > 50) are never shared, so they can't be
+// blocked/blocking.
+function ludoPathBlocked(color, fromPos, toPos, tokensState, colors) {
+  const start = fromPos < 0 ? 0 : fromPos + 1;
+  const end = Math.min(toPos, 50);
+  for (let p = start; p <= end; p++) {
+    const globalIdx = (LUDO_START_INDEX[color] + p) % 52;
+    for (const oc of colors) {
+      if (oc === color) continue;
+      const count = tokensState[oc].filter(pp => pp >= 0 && pp <= 50 && (LUDO_START_INDEX[oc] + pp) % 52 === globalIdx).length;
+      if (count >= 2) return true;
+    }
+  }
+  return false;
+}
+
+function ludoComputeMovable(color, diceVal, tokensState, colors) {
+  const cs = colors || LUDO_COLORS;
   const out = [];
   tokensState[color].forEach((pos, idx) => {
     if (pos === 57) return;
-    if (pos === -1) { if (diceVal === 6) out.push(idx); return; }
-    if (pos + diceVal <= 57) out.push(idx);
+    if (pos === -1) {
+      if (diceVal === 6 && !ludoPathBlocked(color, -1, 0, tokensState, cs)) out.push(idx);
+      return;
+    }
+    const newPos = pos + diceVal;
+    if (newPos <= 57 && !ludoPathBlocked(color, pos, newPos, tokensState, cs)) out.push(idx);
   });
   return out;
 }
@@ -6846,7 +7176,7 @@ function LudoDiceFace({ value, size = 46 }) {
   );
 }
 
-function LudoGame({ theme, skin, session, room, showToast }) {
+function LudoGame({ theme, skin, session, room, showToast, profile, onOpenProfile }) {
   const myId = session?.user?.id || null;
   const opponent = room.opponent || null;
   const isOnline = room.mode === 'online' && !!opponent && !!myId;
@@ -6872,12 +7202,16 @@ function LudoGame({ theme, skin, session, room, showToast }) {
   const connecting = isOnline && (!channelReady || !opponentPresent);
   const boardWrapRef = useRef(null);
   const boardSize = useFitSquareSize(boardWrapRef, 620, 260);
+  const [chatMessages, setChatMessages] = useState([]);
 
   const players = useMemo(() => colors.map((color, i) => ({
     color,
+    hex: LUDO_COLOR_HEX[color],
     isBot: isBot && i > 0,
     name: isOnline ? (color === myColor ? 'You' : (opponent?.display_name || opponent?.username || LUDO_COLOR_NAME[color])) : (isBot && i > 0 ? 'Computer' : LUDO_COLOR_NAME[color]),
-  })), [colors, isBot, isOnline, myColor, opponent]);
+    account: isOnline ? (color === myColor ? profile : opponent) : null,
+  })), [colors, isBot, isOnline, myColor, opponent, profile]);
+
 
   function broadcastIfOnline(payload) {
     if (isOnline && channelRef.current) {
@@ -6896,6 +7230,7 @@ function LudoGame({ theme, skin, session, room, showToast }) {
     setMyColor(myId < opponent.id ? colors[0] : colors[1]);
     setChannelReady(false);
     setOpponentPresent(false);
+    setChatMessages([]);
 
     const pairKey = [myId, opponent.id].sort().join('-');
     const channel = supabaseClient.channel(`ludo-bc-${pairKey}`, {
@@ -6913,24 +7248,21 @@ function LudoGame({ theme, skin, session, room, showToast }) {
         setDice(payload.dice);
         setSixStreak(payload.sixStreak);
         setWinner(payload.winner || null);
-        setMovable(payload.dice != null ? ludoComputeMovable(colors[payload.turnIdx], payload.dice, payload.tokens) : []);
+        setMovable(payload.dice != null ? ludoComputeMovable(colors[payload.turnIdx], payload.dice, payload.tokens, colors) : []);
       })
       .on('broadcast', { event: 'reset' }, () => {
         setTokens(emptyTokens()); setTurnIdx(0); setDice(null); setMovable([]); setSixStreak(0); setWinner(null);
       })
-      .subscribe(async (subStatus) => {
-        if (subStatus === 'SUBSCRIBED') {
-          setChannelReady(true);
-          await channel.track({ joined_at: Date.now() });
-        } else if (subStatus === 'CHANNEL_ERROR' || subStatus === 'TIMED_OUT') {
-          showToast?.('Couldn\u2019t reach the game \u2014 try again');
-        }
-      });
-
     channelRef.current = channel;
     return () => { supabaseClient.removeChannel(channel); channelRef.current = null; };
     // eslint-disable-next-line
   }, [isOnline, myId, opponent?.id]);
+
+  function sendChat(text) {
+    const msg = { text, senderId: myId, ts: Date.now() };
+    setChatMessages(m => [...m, msg]);
+    channelRef.current?.send({ type: 'broadcast', event: 'chat', payload: msg });
+  }
 
   const canRoll = !winner && !connecting && !rolling && dice == null &&
     (!isOnline || colors[turnIdx] === myColor) && !players[turnIdx]?.isBot;
@@ -6958,7 +7290,7 @@ function LudoGame({ theme, skin, session, room, showToast }) {
       setSixStreak(newStreak);
       setDice(val);
       const color = colors[turnIdx];
-      const mv = ludoComputeMovable(color, val, tokens);
+      const mv = ludoComputeMovable(color, val, tokens, colors);
       setMovable(mv);
       broadcastIfOnline({ tokens, turnIdx, dice: val, sixStreak: newStreak, winner: null });
       if (mv.length === 0) {
@@ -7086,20 +7418,29 @@ function LudoGame({ theme, skin, session, room, showToast }) {
         const entryColor = isEntry ? LUDO_COLORS.find(cl => LUDO_START_INDEX[cl] === info.index) : null;
         bg = info.type === 'home' ? `${LUDO_COLOR_HEX[info.color]}55` : (entryColor ? `${LUDO_COLOR_HEX[entryColor]}40` : theme.bg);
         if (occ && occ.length) {
-          const top = occ[occ.length - 1];
-          const isMovableHere = movable.includes(top.idx) && colors[turnIdx] === top.color;
-          clickable = isMovableHere;
+          // Every token on this square gets its own circle, individually
+          // clickable \u2014 previously only the last one in the array was
+          // drawn, which silently hid (and made unmovable) anything
+          // stacked underneath it, including a token's own teammate.
+          const multi = occ.length > 1;
+          clickable = occ.some(t => movable.includes(t.idx) && colors[turnIdx] === t.color);
           content = (
-            <div
-              onClick={() => isMovableHere && applyMove(top.idx)}
-              style={{
-                width: '72%', height: '72%', borderRadius: '50%', background: LUDO_COLOR_HEX[top.color],
-                border: '2px solid rgba(255,255,255,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: isMovableHere ? 'pointer' : 'default', boxShadow: isMovableHere ? `0 0 0 3px ${theme.accent}` : '0 2px 5px rgba(0,0,0,0.4)',
-                animation: isMovableHere ? 'ludoPulse 900ms ease-in-out infinite' : 'none', fontSize: 8.5, fontWeight: 800, color: '#fff',
-              }}
-            >
-              {occ.length > 1 ? occ.length : ''}
+            <div style={{ width: '86%', height: '86%', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', alignContent: 'center', gap: 1 }}>
+              {occ.map(t => {
+                const isMovableHere = movable.includes(t.idx) && colors[turnIdx] === t.color;
+                return (
+                  <div
+                    key={`${t.color}-${t.idx}`}
+                    onClick={(e) => { e.stopPropagation(); if (isMovableHere) applyMove(t.idx); }}
+                    style={{
+                      width: multi ? '46%' : '72%', height: multi ? '46%' : '72%', borderRadius: '50%', background: LUDO_COLOR_HEX[t.color],
+                      border: '1.5px solid rgba(255,255,255,0.75)',
+                      cursor: isMovableHere ? 'pointer' : 'default', boxShadow: isMovableHere ? `0 0 0 2px ${theme.accent}` : '0 1px 3px rgba(0,0,0,0.4)',
+                      animation: isMovableHere ? 'ludoPulse 900ms ease-in-out infinite' : 'none',
+                    }}
+                  />
+                );
+              })}
             </div>
           );
         } else if (isSafe) {
@@ -7141,7 +7482,7 @@ function LudoGame({ theme, skin, session, room, showToast }) {
   }
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative' }}>
       <div className={panelClass} style={{ background: panelBg, borderRadius: 12, padding: '9px 12px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
         <Circle size={8} fill={LUDO_COLOR_HEX[colors[turnIdx]]} color={theme.bg} strokeWidth={0} />
         <div style={{ flex: 1, fontSize: 12.5, fontWeight: 700, color: theme.text }}>{statusText}</div>
@@ -7149,10 +7490,7 @@ function LudoGame({ theme, skin, session, room, showToast }) {
 
       <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
         {players.map((p, i) => (
-          <div key={p.color} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 9px', borderRadius: 999, background: i === turnIdx && !winner ? `${LUDO_COLOR_HEX[p.color]}33` : 'transparent', border: `1px solid ${LUDO_COLOR_HEX[p.color]}55` }}>
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: LUDO_COLOR_HEX[p.color] }} />
-            <span style={{ fontSize: 10.5, fontWeight: 700, color: theme.text }}>{p.name}</span>
-          </div>
+          <GamePlayerPill key={p.color} p={p} active={i === turnIdx && !winner} theme={theme} skin={skin} onOpenProfile={onOpenProfile} />
         ))}
       </div>
 
@@ -7163,7 +7501,7 @@ function LudoGame({ theme, skin, session, room, showToast }) {
         </div>
         {connecting && (
           <div style={{ position: 'absolute', inset: 0, background: `${theme.bg}cc`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ fontSize: 12, color: theme.muted, fontWeight: 600 }}>Connecting\u2026</div>
+            <div style={{ fontSize: 12, color: theme.muted, fontWeight: 600 }}>Connecting…</div>
           </div>
         )}
       </div>
@@ -7183,6 +7521,7 @@ function LudoGame({ theme, skin, session, room, showToast }) {
           <RefreshCw size={14} /> {isOnline ? 'Rematch' : 'New game'}
         </button>
       )}
+      {isOnline && <GameChatBox theme={theme} skin={skin} messages={chatMessages} onSend={sendChat} myId={myId} disabled={connecting} />}
     </div>
   );
 }
@@ -7249,7 +7588,7 @@ function snlSnakeCurve(x1, y1, x2, y2, headNum) {
   return [mx + nx * bend, my + ny * bend];
 }
 
-function SnakesGame({ theme, skin, session, room, showToast }) {
+function SnakesGame({ theme, skin, session, room, showToast, profile, onOpenProfile }) {
   const myId = session?.user?.id || null;
   const opponent = room.opponent || null;
   const isOnline = room.mode === 'online' && !!opponent && !!myId;
@@ -7272,12 +7611,15 @@ function SnakesGame({ theme, skin, session, room, showToast }) {
   const connecting = isOnline && (!channelReady || !opponentPresent);
   const boardWrapRef = useRef(null);
   const boardSize = useFitSquareSize(boardWrapRef, 600, 260);
+  const [chatMessages, setChatMessages] = useState([]);
 
   const players = useMemo(() => colors.map((color, i) => ({
     color,
+    hex: LUDO_COLOR_HEX[color],
     isBot: isBot && i > 0,
     name: isOnline ? (color === myColor ? 'You' : (opponent?.display_name || opponent?.username || LUDO_COLOR_NAME[color])) : (isBot && i > 0 ? 'Computer' : LUDO_COLOR_NAME[color]),
-  })), [colors, isBot, isOnline, myColor, opponent]);
+    account: isOnline ? (color === myColor ? profile : opponent) : null,
+  })), [colors, isBot, isOnline, myColor, opponent, profile]);
 
   function broadcastIfOnline(payload) {
     if (isOnline && channelRef.current) channelRef.current.send({ type: 'broadcast', event: 'state', payload });
@@ -7290,6 +7632,7 @@ function SnakesGame({ theme, skin, session, room, showToast }) {
     setMyColor(myId < opponent.id ? colors[0] : colors[1]);
     setChannelReady(false);
     setOpponentPresent(false);
+    setChatMessages([]);
 
     const pairKey = [myId, opponent.id].sort().join('-');
     const channel = supabaseClient.channel(`snl-bc-${pairKey}`, {
@@ -7310,6 +7653,7 @@ function SnakesGame({ theme, skin, session, room, showToast }) {
       .on('broadcast', { event: 'reset' }, () => {
         setPositions(startPositions()); setTurnIdx(0); setDice(null); setWinner(null);
       })
+      .on('broadcast', { event: 'chat' }, ({ payload }) => setChatMessages(m => [...m, payload]))
       .subscribe(async (subStatus) => {
         if (subStatus === 'SUBSCRIBED') {
           setChannelReady(true);
@@ -7323,6 +7667,12 @@ function SnakesGame({ theme, skin, session, room, showToast }) {
     return () => { supabaseClient.removeChannel(channel); channelRef.current = null; };
     // eslint-disable-next-line
   }, [isOnline, myId, opponent?.id]);
+
+  function sendChat(text) {
+    const msg = { text, senderId: myId, ts: Date.now() };
+    setChatMessages(m => [...m, msg]);
+    channelRef.current?.send({ type: 'broadcast', event: 'chat', payload: msg });
+  }
 
   const canRoll = !winner && !connecting && !rolling && dice == null &&
     (!isOnline || colors[turnIdx] === myColor) && !players[turnIdx]?.isBot;
@@ -7452,7 +7802,7 @@ function SnakesGame({ theme, skin, session, room, showToast }) {
   });
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative' }}>
       <div className={panelClass} style={{ background: panelBg, borderRadius: 12, padding: '9px 12px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
         <Circle size={8} fill={LUDO_COLOR_HEX[colors[turnIdx]]} color={theme.bg} strokeWidth={0} />
         <div style={{ flex: 1, fontSize: 12.5, fontWeight: 700, color: theme.text }}>{statusText}</div>
@@ -7460,11 +7810,7 @@ function SnakesGame({ theme, skin, session, room, showToast }) {
 
       <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
         {players.map((p, i) => (
-          <div key={p.color} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 9px', borderRadius: 999, background: i === turnIdx && !winner ? `${LUDO_COLOR_HEX[p.color]}33` : 'transparent', border: `1px solid ${LUDO_COLOR_HEX[p.color]}55` }}>
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: LUDO_COLOR_HEX[p.color] }} />
-            <span style={{ fontSize: 10.5, fontWeight: 700, color: theme.text }}>{p.name}</span>
-            <span style={{ fontSize: 9.5, color: theme.muted }}>{positions[p.color] || 0}</span>
-          </div>
+          <GamePlayerPill key={p.color} p={p} active={i === turnIdx && !winner} theme={theme} skin={skin} onOpenProfile={onOpenProfile} right={<span style={{ fontSize: 9.5, color: theme.muted }}>{positions[p.color] || 0}</span>} />
         ))}
       </div>
 
@@ -7478,7 +7824,7 @@ function SnakesGame({ theme, skin, session, room, showToast }) {
           </svg>
           {connecting && (
             <div style={{ position: 'absolute', inset: 0, background: `${theme.bg}cc`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <div style={{ fontSize: 12, color: theme.muted, fontWeight: 600 }}>Connecting\u2026</div>
+              <div style={{ fontSize: 12, color: theme.muted, fontWeight: 600 }}>Connecting…</div>
             </div>
           )}
         </div>
@@ -7498,6 +7844,7 @@ function SnakesGame({ theme, skin, session, room, showToast }) {
           <RefreshCw size={14} /> {isOnline ? 'Rematch' : 'New game'}
         </button>
       )}
+      {isOnline && <GameChatBox theme={theme} skin={skin} messages={chatMessages} onSend={sendChat} myId={myId} disabled={connecting} />}
     </div>
   );
 }
@@ -7588,7 +7935,7 @@ function MatatuCardFace({ card, size = 52, faceDown = false, dim = false, highli
   );
 }
 
-function MatatuGame({ theme, skin, session, room, showToast }) {
+function MatatuGame({ theme, skin, session, room, showToast, profile, onOpenProfile }) {
   const myId = session?.user?.id || null;
   const opponent = room.opponent || null;
   const isOnline = room.mode === 'online' && !!opponent && !!myId;
@@ -7613,12 +7960,15 @@ function MatatuGame({ theme, skin, session, room, showToast }) {
   const channelRef = useRef(null);
   const connecting = isOnline && (!channelReady || !opponentPresent);
   const isHost = !isOnline || (myId && opponent && myId < opponent.id);
+  const [chatMessages, setChatMessages] = useState([]);
 
   const players = useMemo(() => colors.map((color, i) => ({
     color,
+    hex: LUDO_COLOR_HEX[color],
     isBot: isBot && i > 0,
     name: isOnline ? (i === myIdx ? 'You' : (opponent?.display_name || opponent?.username || LUDO_COLOR_NAME[color])) : (isBot && i > 0 ? 'Computer' : LUDO_COLOR_NAME[color]),
-  })), [colors, isBot, isOnline, myIdx, opponent]);
+    account: isOnline ? (i === myIdx ? profile : opponent) : null,
+  })), [colors, isBot, isOnline, myIdx, opponent, profile]);
 
   function broadcastState(next) {
     if (isOnline && channelRef.current) channelRef.current.send({ type: 'broadcast', event: 'state', payload: next });
@@ -7658,6 +8008,7 @@ function MatatuGame({ theme, skin, session, room, showToast }) {
     setChannelReady(false);
     setOpponentPresent(false);
     setDealt(false);
+    setChatMessages([]);
 
     const pairKey = [myId, opponent.id].sort().join('-');
     const channel = supabaseClient.channel(`matatu-bc-${pairKey}`, {
@@ -7684,6 +8035,7 @@ function MatatuGame({ theme, skin, session, room, showToast }) {
       .on('broadcast', { event: 'reset' }, () => {
         if (iAmA) { const fresh = dealFreshGame(); applyState(fresh); channel.send({ type: 'broadcast', event: 'state', payload: fresh }); }
       })
+      .on('broadcast', { event: 'chat' }, ({ payload }) => setChatMessages(m => [...m, payload]))
       .subscribe(async (subStatus) => {
         if (subStatus === 'SUBSCRIBED') {
           setChannelReady(true);
@@ -7698,13 +8050,15 @@ function MatatuGame({ theme, skin, session, room, showToast }) {
     // eslint-disable-next-line
   }, [isOnline, myId, opponent?.id]);
 
+  function sendChat(text) {
+    const msg = { text, senderId: myId, ts: Date.now() };
+    setChatMessages(m => [...m, msg]);
+    channelRef.current?.send({ type: 'broadcast', event: 'chat', payload: msg });
+  }
+
   const topCard = discard[discard.length - 1] || null;
   const handOwnerIdx = isOnline ? myIdx : isBot ? 0 : turnIdx;
   const myTurn = !winner && dealt && !connecting && turnIdx === handOwnerIdx && !players[turnIdx]?.isBot;
-  const legalCardIds = useMemo(() => {
-    if (!topCard || !myTurn) return new Set();
-    return new Set((hands[handOwnerIdx] || []).filter(c => matatuCanPlay(c, topCard, activeSuit, pendingPickup)).map(c => c.id));
-  }, [hands, handOwnerIdx, topCard, activeSuit, pendingPickup, myTurn]);
 
   function finalizePlay(playerIdx, card, chosenSuit) {
     const hand = hands[playerIdx].filter(c => c.id !== card.id);
@@ -7805,7 +8159,7 @@ function MatatuGame({ theme, skin, session, room, showToast }) {
   const myHand = hands[handOwnerIdx] || [];
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative' }}>
       <div className={panelClass} style={{ background: panelBg, borderRadius: 12, padding: '9px 12px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
         <Circle size={8} fill={LUDO_COLOR_HEX[colors[turnIdx]] || theme.accent} color={theme.bg} strokeWidth={0} />
         <div style={{ flex: 1, fontSize: 12.5, fontWeight: 700, color: theme.text }}>{statusText}</div>
@@ -7816,12 +8170,12 @@ function MatatuGame({ theme, skin, session, room, showToast }) {
 
       <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
         {players.map((p, i) => (
-          <div key={p.color} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 9px', borderRadius: 999, background: i === turnIdx && !winner ? `${LUDO_COLOR_HEX[p.color]}33` : 'transparent', border: `1px solid ${LUDO_COLOR_HEX[p.color]}55` }}>
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: LUDO_COLOR_HEX[p.color] }} />
-            <span style={{ fontSize: 10.5, fontWeight: 700, color: theme.text }}>{p.name}</span>
-            <span style={{ fontSize: 9.5, color: theme.muted }}>{(hands[i] || []).length}</span>
-            {(hands[i] || []).length === 1 && !winner && <span style={{ fontSize: 9, fontWeight: 800, color: theme.accent, animation: 'ludoPulse 900ms ease-in-out infinite' }}>Matatu!</span>}
-          </div>
+          <GamePlayerPill key={p.color} p={p} active={i === turnIdx && !winner} theme={theme} skin={skin} onOpenProfile={onOpenProfile} right={
+            <>
+              <span style={{ fontSize: 9.5, color: theme.muted }}>{(hands[i] || []).length}</span>
+              {(hands[i] || []).length === 1 && !winner && <span style={{ fontSize: 9, fontWeight: 800, color: theme.accent, animation: 'ludoPulse 900ms ease-in-out infinite' }}>Matatu!</span>}
+            </>
+          } />
         ))}
       </div>
 
@@ -7860,27 +8214,29 @@ function MatatuGame({ theme, skin, session, room, showToast }) {
 
         {connecting && (
           <div style={{ position: 'absolute', inset: 0, background: `${theme.bg}cc`, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 12 }}>
-            <div style={{ fontSize: 12, color: theme.muted, fontWeight: 600 }}>Connecting\u2026</div>
+            <div style={{ fontSize: 12, color: theme.muted, fontWeight: 600 }}>Connecting…</div>
           </div>
         )}
       </div>
 
-      <div style={{ display: 'flex', gap: 6, overflowX: 'auto', padding: '10px 2px', minHeight: 78 }}>
-        {myHand.map(card => {
-          const isLegal = legalCardIds.has(card.id);
-          return (
+      {/* Hand tray is its own "shelf", set apart from the pile above with a
+          divider and a label, so it never reads as part of the played cards.
+          No dimming/highlighting \u2014 every card is tappable and the player
+          decides what's playable themselves; an illegal tap is simply a no-op. */}
+      <div style={{ borderTop: `1px solid ${theme.muted}2e`, marginTop: 6, paddingTop: 10 }}>
+        <div style={{ fontSize: 9.5, fontWeight: 800, color: theme.muted, textTransform: 'uppercase', letterSpacing: 0.5, padding: '0 2px 6px' }}>Your hand</div>
+        <div style={{ display: 'flex', gap: 6, overflowX: 'auto', padding: '4px 2px 10px', minHeight: 78 }}>
+          {myHand.map(card => (
             <MatatuCardFace
               key={card.id} card={card} size={50} theme={theme}
-              dim={myTurn && !isLegal}
-              highlight={myTurn && isLegal}
-              onClick={myTurn && isLegal ? () => attemptPlay(handOwnerIdx, card) : undefined}
+              onClick={myTurn ? () => attemptPlay(handOwnerIdx, card) : undefined}
             />
-          );
-        })}
+          ))}
+        </div>
       </div>
 
       <div style={{ fontSize: 11, color: theme.muted, textAlign: 'center', marginBottom: winner != null ? 8 : 0 }}>
-        {winner != null ? 'Game over' : connecting ? 'Waiting to connect\u2026' : !myTurn ? (players[turnIdx]?.isBot ? 'Computer is playing\u2026' : 'Waiting for their move\u2026') : pendingPickup > 0 ? `Play a 2 or tap the deck to draw ${pendingPickup}` : legalCardIds.size > 0 ? 'Tap a highlighted card, or draw' : 'No playable card \u2014 tap the deck to draw'}
+        {winner != null ? 'Game over' : connecting ? 'Waiting to connect\u2026' : !myTurn ? (players[turnIdx]?.isBot ? 'Computer is playing\u2026' : 'Waiting for their move\u2026') : ''}
       </div>
 
       {winner != null && (
@@ -7888,6 +8244,297 @@ function MatatuGame({ theme, skin, session, room, showToast }) {
           <RefreshCw size={14} /> {isOnline ? 'Rematch' : 'New game'}
         </button>
       )}
+      {isOnline && <GameChatBox theme={theme} skin={skin} messages={chatMessages} onSend={sendChat} myId={myId} disabled={connecting} />}
+    </div>
+  );
+}
+
+/* ==========================================================================
+   SECTION 10a-6 — WOULD YOU RATHER
+   Not a board game \u2014 each round everyone privately locks in A or B, then
+   it reveals all at once. Three modes, same shape as the others:
+     - offline: hot-seat. Only the current picker's side is tappable; after
+       they lock in, a "pass to X" interstitial covers the screen so the
+       next person can't see who picked what before choosing themselves.
+     - bot: computer answers instantly with a random pick.
+     - online: both sides answer independently and simultaneously (no
+       passing). The question order is derived from the two players' ids
+       (a seeded shuffle) so both clients land on the same order without
+       ever needing to broadcast it \u2014 only picks and "next question" are
+       sent, same broadcast-only pattern as Chess/Ludo/Matatu.
+   ========================================================================== */
+
+const WYR_PROMPTS = [
+  { a: 'Have the ability to fly', b: 'Have the ability to turn invisible' },
+  { a: 'Always be 10 minutes late', b: 'Always be 20 minutes early' },
+  { a: 'Never use social media again', b: 'Never watch another movie or show again' },
+  { a: 'Live without music', b: 'Live without TV/movies' },
+  { a: 'Be famous but broke', b: 'Be rich but unknown' },
+  { a: 'Know how you die', b: 'Know when you die' },
+  { a: 'Give up your phone for a month', b: 'Give up junk food for a year' },
+  { a: 'Have unlimited money', b: 'Have unlimited time' },
+  { a: 'Read minds', b: 'See 10 minutes into the future' },
+  { a: 'Live in a big city', b: 'Live in a small quiet town' },
+  { a: 'Lose your sense of taste', b: 'Lose your sense of smell' },
+  { a: 'Always have to sing instead of talk', b: 'Always have to dance everywhere you walk' },
+  { a: 'Be able to speak every language', b: 'Be able to talk to any animal' },
+  { a: 'Never have to sleep', b: 'Never have to eat' },
+  { a: 'Relive the same day forever', b: 'Skip 10 years into the future right now' },
+  { a: 'Have everyone know when you\u2019re lying', b: 'Never know if someone is lying to you' },
+  { a: 'Explore space', b: 'Explore the deep ocean' },
+  { a: 'Be the funniest person in the room', b: 'Be the smartest person in the room' },
+  { a: 'Only be able to whisper', b: 'Only be able to shout' },
+  { a: 'Have a rewind button on life', b: 'Have a pause button on life' },
+  { a: 'Live without the internet', b: 'Live without air conditioning/heating' },
+  { a: 'Win the lottery', b: 'Get your dream job with no effort' },
+  { a: 'Be stuck in traffic for 2 hours', b: 'Sit next to a crying baby for a 2 hour flight' },
+  { a: 'Always know when someone is thinking about you', b: 'Always know when someone is talking about you' },
+  { a: 'Have super strength', b: 'Have super speed' },
+  { a: 'Never be able to lie', b: 'Never be able to keep a secret' },
+  { a: 'Have a personal chef', b: 'Have a personal driver' },
+  { a: 'Live in your favorite movie', b: 'Live in your favorite video game' },
+  { a: 'Be able to teleport anywhere', b: 'Be able to freeze time' },
+  { a: 'Only eat sweet foods forever', b: 'Only eat savory foods forever' },
+];
+
+// Deterministic shuffle from a text seed \u2014 lets both online players
+// compute the identical question order locally with nothing broadcast.
+function wyrSeededOrder(seed, length) {
+  let s = 0;
+  for (let i = 0; i < seed.length; i++) s = (Math.imul(s, 31) + seed.charCodeAt(i)) >>> 0;
+  const rand = () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; };
+  const arr = Array.from({ length }, (_, i) => i);
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function WouldYouRatherGame({ theme, skin, session, room, showToast, profile, onOpenProfile }) {
+  const myId = session?.user?.id || null;
+  const opponent = room.opponent || null;
+  const isOnline = room.mode === 'online' && !!opponent && !!myId;
+  const isBot = room.mode === 'bot';
+  const seatCount = isOnline ? 2 : (isBot ? 2 : (room.playerCount || 2));
+  const seatColors = LUDO_COLORS.slice(0, seatCount);
+  const mySeatIdx = isOnline ? (myId < opponent.id ? 0 : 1) : 0;
+
+  const order = useMemo(() => (
+    isOnline ? wyrSeededOrder([myId, opponent.id].sort().join('-'), WYR_PROMPTS.length) : matatuShuffle(WYR_PROMPTS.map((_, i) => i))
+  ), [isOnline, myId, opponent?.id]);
+
+  const [pos, setPos] = useState(0);
+  const [answers, setAnswers] = useState({});
+  const [pickerIdx, setPickerIdx] = useState(0);
+  const [passWaiting, setPassWaiting] = useState(false);
+  const [channelReady, setChannelReady] = useState(false);
+  const [opponentPresent, setOpponentPresent] = useState(false);
+  const channelRef = useRef(null);
+  const connecting = isOnline && (!channelReady || !opponentPresent);
+  const [chatMessages, setChatMessages] = useState([]);
+
+  const players = useMemo(() => Array.from({ length: seatCount }, (_, i) => ({
+    idx: i,
+    color: seatColors[i],
+    hex: LUDO_COLOR_HEX[seatColors[i]],
+    isBot: isBot && i === 1,
+    name: isOnline ? (i === mySeatIdx ? 'You' : (opponent?.display_name || opponent?.username || 'Them')) : (isBot && i === 1 ? 'Computer' : (seatCount > 1 ? `Player ${i + 1}` : 'You')),
+    account: isOnline ? (i === mySeatIdx ? profile : opponent) : null,
+  })), [seatCount, seatColors, isBot, isOnline, mySeatIdx, opponent, profile]);
+
+  const revealed = Object.keys(answers).length >= seatCount;
+  const prompt = WYR_PROMPTS[order[pos % order.length]];
+
+  function broadcastIfOnline(payload) {
+    if (isOnline && channelRef.current) channelRef.current.send({ type: 'broadcast', event: 'state', payload });
+  }
+
+  // ---- Online: same broadcast-only pattern as the other games \u2014 whoever
+  // acts computes the resulting state and sends the whole thing; the other
+  // client just adopts it verbatim.
+  useEffect(() => {
+    if (!isOnline) return;
+    if (!supabaseClient) { showToast?.('Online play needs Vinylist\u2019s backend connected'); return; }
+
+    setChannelReady(false);
+    setOpponentPresent(false);
+    setPos(0);
+    setAnswers({});
+    setChatMessages([]);
+
+    const pairKey = [myId, opponent.id].sort().join('-');
+    const channel = supabaseClient.channel(`wyr-bc-${pairKey}`, {
+      config: { broadcast: { self: false }, presence: { key: myId } },
+    });
+
+    channel
+      .on('presence', { event: 'sync' }, () => {
+        const state = channel.presenceState();
+        setOpponentPresent(Object.prototype.hasOwnProperty.call(state, opponent.id));
+      })
+      .on('broadcast', { event: 'state' }, ({ payload }) => {
+        setPos(payload.pos);
+        setAnswers(payload.answers);
+      })
+      .on('broadcast', { event: 'chat' }, ({ payload }) => setChatMessages(m => [...m, payload]))
+      .subscribe(async (subStatus) => {
+        if (subStatus === 'SUBSCRIBED') {
+          setChannelReady(true);
+          await channel.track({ joined_at: Date.now() });
+        } else if (subStatus === 'CHANNEL_ERROR' || subStatus === 'TIMED_OUT') {
+          showToast?.('Couldn\u2019t reach the game \u2014 try again');
+        }
+      });
+
+    channelRef.current = channel;
+    return () => { supabaseClient.removeChannel(channel); channelRef.current = null; };
+    // eslint-disable-next-line
+  }, [isOnline, myId, opponent?.id]);
+
+  function sendChat(text) {
+    const msg = { text, senderId: myId, ts: Date.now() };
+    setChatMessages(m => [...m, msg]);
+    channelRef.current?.send({ type: 'broadcast', event: 'chat', payload: msg });
+  }
+
+  function pick(seatIdx, choice) {
+    const nextAnswers = { ...answers, [seatIdx]: choice };
+    setAnswers(nextAnswers);
+    if (isOnline) {
+      broadcastIfOnline({ pos, answers: nextAnswers });
+      return;
+    }
+    if (Object.keys(nextAnswers).length >= seatCount) return;
+    const nextPicker = pickerIdx + 1;
+    setPickerIdx(nextPicker);
+    if (players[nextPicker]?.isBot) return; // bot effect below handles it
+    if (nextPicker < seatCount) setPassWaiting(true);
+  }
+
+  // ---- Bot: answers on its own turn, small delay so it doesn't feel instant.
+  useEffect(() => {
+    if (isOnline || revealed) return;
+    const player = players[pickerIdx];
+    if (!player?.isBot || answers[pickerIdx] != null) return;
+    const t = setTimeout(() => pick(pickerIdx, Math.random() < 0.5 ? 'A' : 'B'), 700);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line
+  }, [pickerIdx, answers, players, isOnline, revealed]);
+
+  function nextQuestion() {
+    const nextPos = pos + 1;
+    setPos(nextPos);
+    setAnswers({});
+    setPickerIdx(0);
+    setPassWaiting(false);
+    broadcastIfOnline({ pos: nextPos, answers: {} });
+  }
+
+  const panelClass = skin === 'glass' ? 'glasspanel-lite' : skin === 'neu' ? 'neupanel-lite' : undefined;
+  const panelBg = skin === 'glass' ? undefined : skin === 'neu' ? 'var(--neu-bg)' : `${theme.surface}dd`;
+
+  const countA = Object.values(answers).filter(v => v === 'A').length;
+  const countB = Object.values(answers).filter(v => v === 'B').length;
+  const myChoice = isOnline ? answers[mySeatIdx] : null;
+  const activePlayer = isOnline ? players[mySeatIdx] : players[pickerIdx];
+  const canAnswer = isOnline ? (!connecting && myChoice == null) : (!activePlayer?.isBot && answers[pickerIdx] == null);
+  const optSize = (choice, count) => revealed ? (count === Math.max(countA, countB) && count > 0 ? 1.03 : 1) : 1;
+
+  return (
+    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', position: 'relative' }}>
+      {connecting && (
+        <div style={{ textAlign: 'center', fontSize: 12, color: theme.muted, padding: '6px 0 10px' }}>
+          {!channelReady ? 'Connecting\u2026' : `Waiting for ${opponent?.display_name || opponent?.username || 'them'} to join\u2026`}
+        </div>
+      )}
+
+      {seatCount > 1 && (
+        <div style={{ display: 'flex', gap: 5, justifyContent: 'center', marginBottom: 10, flexWrap: 'wrap' }}>
+          {players.map(p => (
+            <GamePlayerPill
+              key={p.idx} p={p} theme={theme} skin={skin} onOpenProfile={onOpenProfile}
+              active={!revealed && (isOnline ? answers[p.idx] == null : p.idx === pickerIdx)}
+              right={(revealed || answers[p.idx] != null) ? <span style={{ fontSize: 11, color: theme.accent }}>{'\u2713'}</span> : null}
+            />
+          ))}
+        </div>
+      )}
+
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 14, padding: '0 2px' }}>
+        <div style={{ textAlign: 'center', fontSize: 10.5, fontWeight: 800, color: theme.muted, textTransform: 'uppercase', letterSpacing: 0.6 }}>
+          Would you rather\u2026
+        </div>
+
+        {['A', 'B'].map((choice, i) => {
+          const text = choice === 'A' ? prompt.a : prompt.b;
+          const count = choice === 'A' ? countA : countB;
+          const pct = revealed && seatCount > 0 ? Math.round((count / seatCount) * 100) : null;
+          const isMine = myChoice === choice || (!isOnline && answers[pickerIdx] === choice);
+          const onSelf = isOnline ? mySeatIdx : pickerIdx;
+          return (
+            <button
+              key={choice}
+              onClick={() => canAnswer && pick(onSelf, choice)}
+              disabled={!canAnswer}
+              className={skin === 'neu' ? 'neu-press' : 'press'}
+              style={{
+                position: 'relative', overflow: 'hidden', textAlign: 'left', borderRadius: 14, padding: '16px 16px',
+                cursor: canAnswer ? 'pointer' : 'default', fontSize: 13.5, fontWeight: 700, lineHeight: 1.4,
+                color: theme.text, ...segStyle(theme, skin, false),
+                border: isMine ? `1.5px solid ${theme.accent}` : '1.5px solid transparent',
+                transform: `scale(${optSize(choice, count)})`, transition: 'transform 160ms ease',
+              }}
+            >
+              {revealed && (
+                <div style={{ position: 'absolute', inset: 0, background: `${theme.accent}1c`, width: `${pct}%`, transition: 'width 400ms ease' }} />
+              )}
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                <span>{text}</span>
+                {revealed && <span style={{ fontSize: 12, fontWeight: 800, color: theme.accent, flexShrink: 0 }}>{pct}%</span>}
+              </div>
+              {revealed && (
+                <div style={{ position: 'relative', display: 'flex', gap: 4, marginTop: 8, flexWrap: 'wrap' }}>
+                  {players.filter(p => answers[p.idx] === choice).map(p => (
+                    <span key={p.idx} style={{ fontSize: 9.5, fontWeight: 700, color: theme.bg, background: LUDO_COLOR_HEX[p.color], borderRadius: 20, padding: '2px 7px' }}>{p.name}</span>
+                  ))}
+                </div>
+              )}
+            </button>
+          );
+        })}
+
+        <div style={{ textAlign: 'center', fontSize: 11.5, color: theme.muted, minHeight: 16 }}>
+          {revealed ? "Everyone's in \u2014 see how you match up" :
+            isOnline ? (myChoice != null ? 'Waiting on them\u2026' : 'Pick one') :
+            activePlayer?.isBot ? 'Computer is deciding\u2026' :
+            seatCount > 1 ? `${activePlayer?.name}\u2019s turn to pick` : 'Pick one'}
+        </div>
+      </div>
+
+      {revealed && (
+        <button
+          onClick={nextQuestion}
+          style={{ borderRadius: 10, padding: '11px 0', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, border: 'none', background: theme.accent, color: theme.bg, marginTop: 12 }}
+        >
+          <RefreshCw size={14} /> Next question
+        </button>
+      )}
+
+      {passWaiting && (
+        <div className={panelClass} style={{ position: 'absolute', inset: 0, background: skin === 'glass' ? undefined : panelBg, backdropFilter: skin === 'glass' ? undefined : 'blur(6px)', borderRadius: 14, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, padding: 24, zIndex: 5 }}>
+          <div style={{ width: 12, height: 12, borderRadius: '50%', background: LUDO_COLOR_HEX[players[pickerIdx]?.color] }} />
+          <div style={{ fontSize: 14, fontWeight: 800, textAlign: 'center' }}>Pass to {players[pickerIdx]?.name}</div>
+          <div style={{ fontSize: 11.5, color: theme.muted, textAlign: 'center', maxWidth: 220 }}>Hand over the phone \u2014 no peeking at what's already been picked.</div>
+          <button
+            onClick={() => setPassWaiting(false)}
+            style={{ borderRadius: 10, padding: '9px 22px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', border: 'none', background: theme.accent, color: theme.bg }}
+          >
+            I\u2019m ready
+          </button>
+        </div>
+      )}
+      {isOnline && <GameChatBox theme={theme} skin={skin} messages={chatMessages} onSend={sendChat} myId={myId} disabled={connecting} />}
     </div>
   );
 }
